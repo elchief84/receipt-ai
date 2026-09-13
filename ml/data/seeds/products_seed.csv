@@ -1,0 +1,21 @@
+product_name,brands,categories_tags,category
+Latte Intero 1L,Conad,en:dairies,groceries
+Pasta Barilla 500G,Barilla,en:pasta,groceries
+Banane SFUSE,Chiquita,en:fruits,groceries
+Passata di Pomodoro 680G,Mutti,en:canned,groceries
+Detersivo Lavatrice 2L,Dash,en:detergents,groceries
+Pizza Margherita,Da Michele,en:pizza,restaurants
+Cappuccino e Cornetto,Centrale,en:breakfast,restaurants
+Benzina Senza Piombo 20L,Eni,en:fuel,transport
+Biglietto Frecciarossa 2a,Trenitalia,en:rail,transport
+Dentifricio Menta 75ML,Colgate,en:oral,health
+Integratore Vitamina C,Swisse,en:supplements,health
+Maglietta Cotone M,OVS,en:clothing,shopping
+Lampadina LED E27,IKEA,en:home,shopping
+Cuffie Bluetooth,Xiaomi,en:audio,technology
+Cavo USB-C 1M,Amazon Basics,en:cables,technology
+Pernottamento Matrimoniale,NH,en:hotels,leisure_travel
+Biglietto Cinema Intero,UCI,en:cinema,leisure_travel
+Bolletta Luce 120kWh,Enel,en:utilities,services
+Raccomandata 20G,Poste,en:postal,services
+Quaderno A4 96p,Feltrinelli,en:stationery,other

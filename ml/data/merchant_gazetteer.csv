@@ -1,0 +1,20 @@
+raw_name,normalized_name,merchant_type,source
+Conad Superstore,conad superstore,supermarket,seed-2026-09-13
+Esselunga,esselunga,supermarket,seed-2026-09-13
+Coop Alleanza,coop alleanza,supermarket,seed-2026-09-13
+Eni Stazione di Servizio,eni stazione di servizio,fuel,seed-2026-09-13
+IP Gruppo API,ip gruppo api,fuel,seed-2026-09-13
+Farmacia Comunale,farmacia comunale,pharmacy,seed-2026-09-13
+Pizzeria Da Michele,pizzeria da michele,restaurant,seed-2026-09-13
+Bar Centrale,bar centrale,restaurant,seed-2026-09-13
+MediaWorld,mediaworld,electronics,seed-2026-09-13
+Unieuro,unieuro,electronics,seed-2026-09-13
+OVS,ovs,clothes,seed-2026-09-13
+IKEA,ikea,home_store,seed-2026-09-13
+Decathlon,decathlon,clothes,seed-2026-09-13
+Trenitalia,trenitalia,transport_service,seed-2026-09-13
+NH Hotel,nh hotel,hotel,seed-2026-09-13
+Poste Italiane,poste italiane,services,seed-2026-09-13
+Enel Energia,enel energia,services,seed-2026-09-13
+Amazon,amazon,ecommerce,seed-2026-09-13
+Feltrinelli,feltrinelli,other,seed-2026-09-13

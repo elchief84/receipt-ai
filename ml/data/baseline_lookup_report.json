@@ -1,0 +1,83 @@
+{
+  "accuracy": 0.0,
+  "f1_macro": 0.0,
+  "per_category": {
+    "leisure_travel": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    "other": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    "shopping": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    "transport": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    }
+  },
+  "confusion_matrix": [
+    [
+      0,
+      0,
+      0,
+      548
+    ],
+    [
+      0,
+      0,
+      0,
+      539
+    ],
+    [
+      0,
+      0,
+      0,
+      1044
+    ],
+    [
+      0,
+      0,
+      0,
+      0
+    ]
+  ],
+  "labels": [
+    "leisure_travel",
+    "other",
+    "shopping",
+    "transport"
+  ],
+  "n_train": 7869,
+  "n_test": 2131,
+  "train_merchants": [
+    "amazon",
+    "bar centrale",
+    "conad superstore",
+    "coop alleanza",
+    "enel energia",
+    "eni stazione di servizio",
+    "esselunga",
+    "farmacia comunale",
+    "ikea",
+    "ip gruppo api",
+    "mediaworld",
+    "pizzeria da michele",
+    "poste italiane",
+    "trenitalia",
+    "unieuro"
+  ],
+  "test_merchants": [
+    "decathlon",
+    "feltrinelli",
+    "nh hotel",
+    "ovs"
+  ]
+}

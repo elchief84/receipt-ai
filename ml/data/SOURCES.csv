@@ -1,0 +1,5 @@
+artifact,source,version,rows,license_note
+off_italy_products.parquet,ml/data/seeds/products_seed.csv (hand-listed public product names; full run: Open Food Facts ODbL filtered country=Italy),seed-2026-09-13,20,"seed rows are hand-written from public knowledge, no DB copied; full OFF run requires attribution + share-alike (ODbL/DbCL)"
+merchant_gazetteer.csv,ml/data/seeds/merchants_seed.csv (hand-listed public merchant names; full run: OpenStreetMap ODbL),seed-2026-09-13,19,"seed rows are hand-written from public knowledge; full OSM run requires (c) OpenStreetMap contributors (ODbL)"
+synth_it_10k.jsonl,compose_receipt.py seed=42 from seeds above,seed-42,10000,derived synthetic — no personal data
+baseline_lookup_report.json,evaluate.py seed=42 test-ratio=0.2 (per-merchant split),exp1,2131 test / 7869 train,"accuracy=0.000 f1_macro=0.000 on unknown merchants — lookup memorizes, does not generalize (ADR-0001)"
