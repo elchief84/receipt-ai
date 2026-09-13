@@ -49,7 +49,7 @@ void main() {
       'ARTICOLI',
       'disney palla di nat',
       'plast ica',
-      'ventosa singola',
+      'ventosa singola prodotto lungo descrittivo',
       'TOTALE',
       '7,95',
     ];
@@ -57,7 +57,7 @@ void main() {
       const Rect.fromLTWH(0, 0, 100, 10),
       const Rect.fromLTWH(0, 10, 60, 10),
       const Rect.fromLTWH(0, 20, 60, 10),
-      const Rect.fromLTWH(0, 30, 60, 10),
+      const Rect.fromLTWH(0, 30, 70, 10),
       const Rect.fromLTWH(0, 50, 60, 10),
       const Rect.fromLTWH(70, 15, 30, 10),
     ];
@@ -66,5 +66,20 @@ void main() {
     expect(items[0].description, 'disney palla di nat plast ica');
     expect(items[0].price, 7.95);
     expect(items[1].price, isNull);
+  });
+
+  test('short fragment hugs the priced item above', () {
+    const ls = ['ARTICOLI', 'disney figura led con', 'ventosa', 'TOTALE', '58,24'];
+    final boxes = [
+      const Rect.fromLTWH(0, 0, 100, 10),
+      const Rect.fromLTWH(0, 10, 60, 10), // disney row
+      const Rect.fromLTWH(0, 21, 60, 9), // ventosa, gap 1 < 1.5*10
+      const Rect.fromLTWH(0, 50, 60, 10), // TOTALE
+      const Rect.fromLTWH(70, 10, 30, 10), // 58,24 overlaps disney only
+    ];
+    final items = TransactionExtractor.segmentItems(ls, boxes);
+    expect(items, hasLength(1));
+    expect(items.first.description, 'disney figura led con ventosa');
+    expect(items.first.price, 58.24);
   });
 }

@@ -271,6 +271,7 @@ class TransactionExtractor {
     }
     if (boxesForPairing != null) {
       _pairColumns(segs, lines, boxesForPairing);
+      _mergeFragments(segs, boxesForPairing);
     }
     // Leftover priceless few: one product split across lines (Fenza).
     // Pairing runs first so two-column rows keep their prices.
@@ -349,6 +350,26 @@ class TransactionExtractor {
       for (final dup in group.skip(1)) {
         segs.remove(dup);
       }
+    }
+  }
+
+  /// Fragment merge: a short priceless line hugging the item above is
+  /// its continuation ("plast ica" under "disney palla di nat"), not a
+  /// new product. Needs boxes (gap measurement); without them the rows
+  /// stay split. Cascades: merged blobs absorb further fragments.
+  static void _mergeFragments(List<_Seg> segs, List<Rect?> boxes) {
+    for (var k = segs.length - 1; k > 0; k--) {
+      final cur = segs[k];
+      if (cur.price != null) continue;
+      if (cur.description.trim().length >= 15) continue;
+      final prev = segs[k - 1];
+      final curBox = boxes[cur.src];
+      final prevBox = boxes[prev.src];
+      if (curBox == null || prevBox == null) continue;
+      if (curBox.top - prevBox.bottom > 1.5 * prevBox.height) continue;
+      prev.description = '${prev.description} ${cur.description}';
+      prev.price ??= cur.price;
+      segs.removeAt(k);
     }
   }
 
