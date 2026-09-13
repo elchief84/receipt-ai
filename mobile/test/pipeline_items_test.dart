@@ -31,4 +31,11 @@ void main() {
     const ocr = 'CONAD\n12/09/2026\n\nTOTALE 10,60';
     expect(keywordPipeline().run(ocr).itemDetails, isEmpty);
   });
+
+  test('single priceless item inherits the transaction total', () {
+    const ocr = 'FARMACIA\nDescrizione\nDENTIFRICIO MENTA\nDI CUI IVA\nTOTALE 13,60';
+    final result = keywordPipeline().run(ocr);
+    expect(result.itemDetails, hasLength(1));
+    expect(result.itemDetails.first.price, 13.60);
+  });
 }

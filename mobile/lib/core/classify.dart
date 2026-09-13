@@ -61,6 +61,8 @@ class ItemClassification {
   final double confidence;
 
   /// Item price from segmentation; null when prices print only in totals.
+  /// When a receipt holds a single such item, the pipeline assigns it
+  /// the transaction total (the whole purchase is that item).
   final double? price;
 }
 

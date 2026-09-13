@@ -92,12 +92,35 @@ class ReceiptPipeline {
       modelVersion: classification.modelVersion,
       ocrText: ocrText,
       items: descriptions,
-      itemDetails: _classifyItems(
-        classifier,
-        merchantType: merchant.merchantType,
-        items: items,
+      itemDetails: _withSingleItemTotal(
+        _classifyItems(
+          classifier,
+          merchantType: merchant.merchantType,
+          items: items,
+        ),
+        draft.total,
       ),
     );
+  }
+
+  /// Single priceless item: the whole purchase is that item, so it
+  /// inherits the transaction total (Fenza case).
+  static List<ItemClassification> _withSingleItemTotal(
+    List<ItemClassification> details,
+    double total,
+  ) {
+    if (details.length != 1 || details.first.price != null || total <= 0) {
+      return details;
+    }
+    final d = details.first;
+    return [
+      ItemClassification(
+        description: d.description,
+        category: d.category,
+        confidence: d.confidence,
+        price: total,
+      ),
+    ];
   }
 
   /// One model call per line, same artifact. A line earns a label only
