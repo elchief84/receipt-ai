@@ -71,8 +71,8 @@ class KeywordClassifier implements Classifier {
     'restaurants': ['pizza', 'ristorante', 'pizzeria', 'cappuccino', 'bar'],
     'transport': ['benzina', 'carburante', 'eni', 'pedaggio', 'trenitalia', 'biglietto'],
     'health': ['farmacia', 'dentifricio', 'parafarmacia'],
-    'shopping': ['maglietta', 'lampadina', 'ikea', 'ovs'],
-    'technology': ['cuffie', 'bluetooth', 'usb', 'cavo', 'mediaworld'],
+    'shopping': ['maglietta', 'lampadina', 'ikea', 'ovs', 'tavolino', 'gioco', 'giocattolo'],
+    'technology': ['cuffie', 'bluetooth', 'usb', 'cavo', 'mediaworld', 'smartphone', 'xiaomi', 'cover', 'custodia'],
     'leisure_travel': ['hotel', 'cinema', 'pernottamento'],
     'services': ['bolletta', 'enel', 'poste', 'raccomandata'],
   };

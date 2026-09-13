@@ -137,8 +137,6 @@ class ReceiptPipeline {
 
   static List<String> _itemLines(String ocrText) {
     final lines = ocrText.split('\n').map((l) => l.trim()).toList();
-    if (lines.length <= 4) return const [];
-    // Skip header (merchant, date) and footer (total).
-    return lines.sublist(2, lines.length - 1).where((l) => l.isNotEmpty).toList();
+    return TransactionExtractor.segmentItems(lines);
   }
 }

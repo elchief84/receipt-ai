@@ -43,7 +43,53 @@ class TransactionExtractor {
   static final _subtotal = RegExp(r'SUB\s*TOT', caseSensitive: false);
   static final _resto =
       RegExp(r'\b(RESTO|RESTA|CAMBIO|CHANGE)\b', caseSensitive: false);
-  static final _amount = RegExp(r'(\d[\d.]*(?:[,.]\d{2}))');
+  // Trailing (?!\d): dotted phone numbers ("0564.620438") are not amounts.
+  static final _amount = RegExp(r'(\d[\d.]*(?:[,.]\d{2}))(?!\d)');
+
+  /// Meta/header lines: never product descriptions (normalized contains).
+  static const _metaWords = {
+    'riepilogo',
+    'ordine',
+    'invia',
+    'venduto',
+    'consegnato',
+    'reso',
+    'metodo',
+    'pagamento',
+    'mastercard',
+    'torna',
+    'aiuto',
+    'subtotale',
+    'totale',
+    'spedizione',
+    'iva',
+    'condizioni',
+    'privacy',
+    'stampa',
+    'italia',
+    'grazie',
+    'arrivederci',
+    'cassa',
+    'scontr',
+    'resto',
+    'contanti',
+    'contante',
+    'carta',
+    'euro',
+    'telefono',
+    'cliente',
+  };
+
+  static bool _isMeta(String line) {
+    // Token-based, never substring: "protettiva" must not match "iva".
+    final tokens = line
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z ]'), ' ')
+        .split(' ')
+        .where((t) => t.isNotEmpty)
+        .toSet();
+    return _metaWords.any(tokens.contains);
+  }
 
   /// OCR-confusion map used ONLY for keyword detection, never for amounts.
   static String _keywordForm(String line) => line
@@ -139,6 +185,88 @@ class TransactionExtractor {
           .map((m) => _parseItalianAmount(m.group(1)!))
           .toList();
       if (amounts.isNotEmpty) return amounts.last;
+    }
+    return null;
+  }
+
+  /// Product descriptions: one per price line. Same-line remainder wins
+  /// (fiscal receipts) unless it is only payment words; otherwise the
+  /// nearest usable line above (order summaries). Section boundaries
+  /// (totals, resto, cassa) stop the climb; other meta is skipped over.
+  /// Pure amounts with no description above are skipped (repeated totals).
+  static const _stopDescTokens = {
+    'totale',
+    'total',
+    'subtotale',
+    'importo',
+    'resto',
+    'resta',
+    'cambio',
+    'change',
+    'contanti',
+    'contante',
+    'euro',
+  };
+
+  /// Section boundary: totals, change, cashier — never climb past these.
+  static bool _isBoundary(String line) {
+    final norm = ' ${line.toLowerCase()} ';
+    return [
+      'totale',
+      'totalo', // OCR fragment of TOTALE
+      'subtotale',
+      'resto',
+      'contanti',
+      'contante',
+      'cassa',
+      'scontr',
+    ].any(norm.contains);
+  }
+
+  static List<String> segmentItems(List<String> lines) {
+    final items = <String>[];
+    for (var i = 0; i < lines.length; i++) {
+      final line = lines[i];
+      final match = _amount.firstMatch(line);
+      if (match == null) continue;
+      final remainder = line.replaceFirst(match.group(0)!, '').trim();
+      // Total lines never become items, whatever the remainder.
+      final keyForm = _keywordForm(line);
+      if (_totalKeyword.hasMatch(keyForm) || _subtotal.hasMatch(keyForm)) {
+        continue;
+      }
+      // Same-line description must carry a real word (>= 2 chars, not
+      // payment-only): "41 s8" or "EURO" alone do not qualify.
+      final tokens = _letterTokens(remainder);
+      if (tokens.any((t) => t.length >= 2) &&
+          tokens.any((t) => !_stopDescTokens.contains(t))) {
+        items.add(remainder);
+        continue;
+      }
+      final above = _nearestDescription(lines, i - 1);
+      if (above != null) items.add(above);
+    }
+    return items;
+  }
+
+  static List<String> _letterTokens(String text) {
+    return text
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z ]'), ' ')
+        .split(' ')
+        .where((t) => t.isNotEmpty && int.tryParse(t) == null)
+        .toList();
+  }
+
+  static String? _nearestDescription(List<String> lines, int from) {
+    var steps = 0;
+    for (var i = from; i >= 0 && steps < 6; i--, steps++) {
+      final line = lines[i];
+      if (_amount.hasMatch(line) || _isBoundary(line)) return null;
+      // Fragments ("ale:", "E") and meta are not descriptions.
+      final letters = line.replaceAll(RegExp(r'[^a-zA-Z]'), '');
+      if (letters.length < 4 || _isMeta(line)) continue;
+      return line;
     }
     return null;
   }
