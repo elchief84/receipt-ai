@@ -1,6 +1,12 @@
 /// Transaction extraction from Italian OCR text (regex, no ML).
 library;
 
+class SegmentedItem {
+  SegmentedItem(this.description, this.price);
+  final String description;
+  final double? price;
+}
+
 class TransactionDraft {
   TransactionDraft({
     required this.merchantRaw,
@@ -227,8 +233,11 @@ class TransactionExtractor {
     ].any(norm.contains);
   }
 
-  static List<String> segmentItems(List<String> lines) {
-    final items = <String>[];
+  /// A segmented product line: description plus the price found on the
+  /// same line or on the price line below it. Null price for body-block
+  /// items (totals-only receipts like Fenza).
+  static List<SegmentedItem> segmentItems(List<String> lines) {
+    final items = <SegmentedItem>[];
     for (var i = 0; i < lines.length; i++) {
       final line = lines[i];
       // Asterisk-led fiscal notes ("* Inp. De traibile 13.60") are never
@@ -236,6 +245,7 @@ class TransactionExtractor {
       if (line.trimLeft().startsWith('*')) continue;
       final match = _amount.firstMatch(line);
       if (match == null) continue;
+      final price = _parseItalianAmount(match.group(1)!);
       final remainder = line.replaceFirst(match.group(0)!, '').trim();
       // Total lines never become items, whatever the remainder.
       final keyForm = _keywordForm(line);
@@ -247,11 +257,11 @@ class TransactionExtractor {
       final tokens = _letterTokens(remainder);
       if (tokens.any((t) => t.length >= 2) &&
           tokens.any((t) => !_stopDescTokens.contains(t))) {
-        items.add(remainder);
+        items.add(SegmentedItem(remainder, price));
         continue;
       }
       final above = _nearestDescription(lines, i - 1);
-      if (above != null) items.add(above);
+      if (above != null) items.add(SegmentedItem(above, price));
     }
     // No price-anchored item: fall back to the receipt body block
     // (RT layout standard: description header .. IVA/totals trailer).
@@ -289,7 +299,7 @@ class TransactionExtractor {
   /// Joined body lines as a single item: when prices print only in the
   /// totals block, the body still names the purchase (pharmacy case).
   /// Capped: a body is a description, not an essay.
-  static List<String> _bodyItems(List<String> lines) {
+  static List<SegmentedItem> _bodyItems(List<String> lines) {
     var start = -1;
     for (var i = 0; i < lines.length; i++) {
       if (_isBodyStart(lines[i])) {
@@ -310,7 +320,7 @@ class TransactionExtractor {
     }
     final joined = body.join(' ');
     if (joined.isEmpty || joined.length > 200) return const [];
-    return [joined];
+    return [SegmentedItem(joined, null)];
   }
 
   static List<String> _letterTokens(String text) {
@@ -336,7 +346,8 @@ class TransactionExtractor {
     return null;
   }
 
-  static double _parseItalianAmount(String raw) {    // "1.234,56" -> 1234.56 ; "10.60" -> 10.60 ; "10,60" -> 10.60
+  static double _parseItalianAmount(String raw) {
+    // "1.234,56" -> 1234.56 ; "10.60" -> 10.60 ; "10,60" -> 10.60
     if (raw.contains(',')) {
       return double.tryParse(raw.replaceAll('.', '').replaceAll(',', '.')) ??
           0.0;

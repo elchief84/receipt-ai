@@ -22,23 +22,28 @@ const amazonItemsOcr =
     '195,83 €';
 
 void main() {
-  test('amazon: exactly the 3 products, no contorno', () {
+  test('amazon: exactly the 3 products with prices, no contorno', () {
     final items = TransactionExtractor.segmentItems(
       amazonItemsOcr.split('\n').map((l) => l.trim()).toList(),
     );
-    expect(items, hasLength(3));
-    expect(items[0], contains('XIAOMI'));
-    expect(items[1], contains('Custodia'));
-    expect(items[2], contains('Fisher-Price'));
+    expect(items.map((e) => e.description).toList(), hasLength(3));
+    expect(items[0].description, contains('XIAOMI'));
+    expect(items[0].price, 129.90);
+    expect(items[1].description, contains('Custodia'));
+    expect(items[1].price, 7.69);
+    expect(items[2].description, contains('Fisher-Price'));
+    expect(items[2].price, 58.24);
   });
 
-  test('fiscal receipt: inline descriptions', () {
+  test('fiscal receipt: inline descriptions with prices', () {
     const ocr =
         'CONAD SUPERSTORE\n12/09/2026\n\nLATTE INTERO 1L 1.49\nDETERSIVO 5.99\n\nTOTALE 10.60';
     final items = TransactionExtractor.segmentItems(
       ocr.split('\n').map((l) => l.trim()).toList(),
     );
-    expect(items, hasLength(2));
+    expect(items.map((e) => e.description).toList(), hasLength(2));
+    expect(items[0].price, 1.49);
+    expect(items[1].price, 5.99);
   });
 
   test('bare repeated totals are skipped', () {
@@ -47,7 +52,8 @@ void main() {
     final items = TransactionExtractor.segmentItems(
       ocr.split('\n').map((l) => l.trim()).toList(),
     );
-    expect(items, ['MOMENT']);
+    expect(items.map((e) => e.description).toList(), ['MOMENT']);
+    expect(items.first.price, 8.60);
   });
 
   test('payment and meta lines never become items', () {
@@ -56,6 +62,15 @@ void main() {
     final items = TransactionExtractor.segmentItems(
       ocr.split('\n').map((l) => l.trim()).toList(),
     );
-    expect(items, ['PANE']);
+    expect(items.map((e) => e.description).toList(), ['PANE']);
+  });
+
+  test('body-block fallback carries no price', () {
+    const ocr = 'SHOP\nDescrizione\nVITAMINE\nDI CUI IVA\nTOTALE 5,00';
+    final items = TransactionExtractor.segmentItems(
+      ocr.split('\n').map((l) => l.trim()).toList(),
+    );
+    expect(items, hasLength(1));
+    expect(items.first.price, isNull);
   });
 }

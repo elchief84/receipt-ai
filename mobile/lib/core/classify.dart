@@ -54,10 +54,14 @@ class ItemClassification {
     required this.description,
     required this.category,
     required this.confidence,
+    this.price,
   });
   final String description;
   final String category;
   final double confidence;
+
+  /// Item price from segmentation; null when prices print only in totals.
+  final double? price;
 }
 
 abstract class Classifier {

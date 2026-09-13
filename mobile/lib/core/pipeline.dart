@@ -68,13 +68,14 @@ class ReceiptPipeline {
     final lines = ocrText.split('\n').map((l) => l.trim()).toList();
     final merchant =
         normalizer.findInLines(lines) ?? normalizer.normalize(draft.merchantRaw);
-    final items = _itemLines(ocrText);
+    final items = TransactionExtractor.segmentItems(lines);
+    final descriptions = items.map((e) => e.description).toList();
     final classification = classifier.classify(
       ClassificationInput(
         merchantNormalized: merchant.normalizedName,
         merchantType: merchant.merchantType,
         ocrText: ocrText,
-        items: items,
+        items: descriptions,
       ),
     );
     return TransactionResult(
@@ -90,27 +91,26 @@ class ReceiptPipeline {
       confidence: classification.confidence,
       modelVersion: classification.modelVersion,
       ocrText: ocrText,
-      items: items,
+      items: descriptions,
       itemDetails: _classifyItems(
         classifier,
-        merchant.normalizedName,
-        merchant.merchantType,
-        items,
+        merchantType: merchant.merchantType,
+        items: items,
       ),
     );
   }
 
   /// One model call per line, same artifact. A line earns a label only
-  /// with >= 2 informative tokens and at least medium confidence —
+  /// with informative tokens and at least medium confidence —
   /// junk lines ("41", "E", "Stampa") stay unlabeled.
   static List<ItemClassification> _classifyItems(
-    Classifier classifier,
-    String merchantNormalized,
-    String merchantType,
-    List<String> items,
-  ) {
+    Classifier classifier, {
+    required String merchantType,
+    required List<SegmentedItem> items,
+  }) {
     final details = <ItemClassification>[];
-    for (final line in items) {
+    for (final item in items) {
+      final line = item.description;
       // No informative tokens (digits/stopwords only): never a label.
       // The merchant name stays OUT of the item signal on purpose:
       // the line must earn its label alone (ADR-0001 at item level).
@@ -129,14 +129,10 @@ class ReceiptPipeline {
           description: line,
           category: res.category,
           confidence: res.confidence,
+          price: item.price,
         ),
       );
     }
     return details;
-  }
-
-  static List<String> _itemLines(String ocrText) {
-    final lines = ocrText.split('\n').map((l) => l.trim()).toList();
-    return TransactionExtractor.segmentItems(lines);
   }
 }

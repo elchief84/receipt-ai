@@ -40,8 +40,10 @@ void main() {
       fenzaOcr.split('\n').map((l) => l.trim()).toList(),
     );
     // Prices print only in the totals block: the RT body block still
-    // names the purchase. Zero garbage items, one joined description.
+    // names the purchase. Zero garbage items, one joined description
+    // with no price.
     expect(items, hasLength(1));
-    expect(items.first, contains('ALOVEX'));
+    expect(items.first.description, contains('ALOVEX'));
+    expect(items.first.price, isNull);
   });
 }

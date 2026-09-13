@@ -116,7 +116,10 @@ class _ResultScreenState extends State<ResultScreen> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 trailing: Text(
-                  '${e.value.category} ${(e.value.confidence * 100).toStringAsFixed(0)}%',
+                  e.value.price != null
+                      ? '€${e.value.price!.toStringAsFixed(2)} · ${e.value.category}'
+                      : e.value.category,
+                  key: Key('itemDetail-price-${e.key}'),
                 ),
               ),
             ),
