@@ -1,10 +1,20 @@
 /// Transaction extraction from Italian OCR text (regex, no ML).
 library;
 
+import 'dart:ui' show Rect;
+
 class SegmentedItem {
   SegmentedItem(this.description, this.price);
   final String description;
   final double? price;
+}
+
+/// Internal item with the source line index, for geometry pairing.
+class _Seg {
+  _Seg(this.description, this.price, this.src);
+  String description;
+  double? price;
+  final int src;
 }
 
 class TransactionDraft {
@@ -236,42 +246,117 @@ class TransactionExtractor {
   }
 
   /// A segmented product line: description plus the price found on the
-  /// same line or on the price line below it. Null price for body-block
-  /// items (totals-only receipts like Fenza).
-  static List<SegmentedItem> segmentItems(List<String> lines) {
+  /// same line, above it, or on the same visual row (two-column layout,
+  /// when boxes are provided). Null price only when no price is found.
+  static List<SegmentedItem> segmentItems(
+    List<String> lines, [
+    List<Rect?>? boxes,
+  ]) {
+    final boxesForPairing =
+        boxes != null && boxes.length == lines.length ? boxes : null;
     // Body-first: when the receipt names its products in a body block
     // (ARTICOLI .. TOTALE), the body IS the item list — trailer prices
     // must not attach header junk ("Auth. code"). Without a body block,
     // fall back to price-anchored lines (inline "LATTE 1.49").
     final body = _bodyBlock(lines);
-    if (body != null) return body;
-    final items = <SegmentedItem>[];
+    final List<_Seg> segs;
+    if (body != null) {
+      segs = body;
+    } else {
+      segs = <_Seg>[];
+      for (var i = 0; i < lines.length; i++) {
+        final found = _priceAnchored(lines, i);
+        if (found != null) segs.add(found);
+      }
+    }
+    if (boxesForPairing != null) {
+      _pairColumns(segs, lines, boxesForPairing);
+    }
+    // Leftover priceless few: one product split across lines (Fenza).
+    // Pairing runs first so two-column rows keep their prices.
+    if (segs.length <= 2 && segs.isNotEmpty && segs.every((e) => e.price == null)) {
+      final joined = segs.map((e) => e.description).join(' ');
+      if (joined.isNotEmpty && joined.length <= 200) {
+        return [SegmentedItem(joined, null)];
+      }
+    }
+    return segs.map((s) => SegmentedItem(s.description, s.price)).toList();
+  }
+
+  /// Price-anchored item for line i, or null.
+  static _Seg? _priceAnchored(List<String> lines, int i) {
+    final line = lines[i];
+    // Asterisk-led fiscal notes ("* Inp. De traibile 13.60") are never
+    // products, even when they carry an amount.
+    if (line.trimLeft().startsWith('*')) return null;
+    final match = _amount.firstMatch(line);
+    if (match == null) return null;
+    final price = _parseItalianAmount(match.group(1)!);
+    final remainder = line.replaceFirst(match.group(0)!, '').trim();
+    // Total lines never become items, whatever the remainder.
+    final keyForm = _keywordForm(line);
+    if (_totalKeyword.hasMatch(keyForm) || _subtotal.hasMatch(keyForm)) {
+      return null;
+    }
+    // Same-line description must carry a real word (>= 2 chars, not
+    // payment-only): "41 s8" or "EURO" alone do not qualify.
+    final tokens = _letterTokens(remainder);
+    if (tokens.any((t) => t.length >= 2) &&
+        tokens.any((t) => !_stopDescTokens.contains(t))) {
+      return _Seg(remainder, price, i);
+    }
+    final above = _nearestDescription(lines, i - 1);
+    if (above >= 0) return _Seg(lines[above], price, above);
+    return null;
+  }
+
+  /// Two-column pairing: a bare amount on the same visual row as a
+  /// priceless description belongs to it (Action layout). Totals and
+  /// IVA amounts sit below the descriptions, so geometry excludes them.
+  static void _pairColumns(
+    List<_Seg> segs,
+    List<String> lines,
+    List<Rect?> boxes,
+  ) {
     for (var i = 0; i < lines.length; i++) {
-      final line = lines[i];
-      // Asterisk-led fiscal notes ("* Inp. De traibile 13.60") are never
-      // products, even when they carry an amount.
-      if (line.trimLeft().startsWith('*')) continue;
-      final match = _amount.firstMatch(line);
+      final box = boxes[i];
+      if (box == null) continue;
+      final match = _amount.firstMatch(lines[i]);
       if (match == null) continue;
-      final price = _parseItalianAmount(match.group(1)!);
-      final remainder = line.replaceFirst(match.group(0)!, '').trim();
-      // Total lines never become items, whatever the remainder.
-      final keyForm = _keywordForm(line);
+      // Skip lines that already are (or contain) descriptions or totals:
+      // only bare amounts pair across columns.
+      final remainder = lines[i].replaceFirst(match.group(0)!, '').trim();
+      if (_letterTokens(remainder).any((t) => t.length >= 2)) continue;
+      final keyForm = _keywordForm(lines[i]);
       if (_totalKeyword.hasMatch(keyForm) || _subtotal.hasMatch(keyForm)) {
         continue;
       }
-      // Same-line description must carry a real word (>= 2 chars, not
-      // payment-only): "41 s8" or "EURO" alone do not qualify.
-      final tokens = _letterTokens(remainder);
-      if (tokens.any((t) => t.length >= 2) &&
-          tokens.any((t) => !_stopDescTokens.contains(t))) {
-        items.add(SegmentedItem(remainder, price));
-        continue;
+      _Seg? best;
+      var bestOverlap = 0.5;
+      for (final seg in segs) {
+        if (seg.price != null) continue;
+        final other = boxes[seg.src];
+        if (other == null) continue;
+        final overlap = _yOverlap(box, other);
+        if (overlap > bestOverlap) {
+          bestOverlap = overlap;
+          best = seg;
+        }
       }
-      final above = _nearestDescription(lines, i - 1);
-      if (above != null) items.add(SegmentedItem(above, price));
+      if (best != null) {
+        best.price = _parseItalianAmount(match.group(1)!);
+      }
     }
-    return items;
+  }
+
+  static double _yOverlap(Rect a, Rect b) {
+    final top = a.top > b.top ? a.top : b.top;
+    final bottom = a.bottom < b.bottom ? a.bottom : b.bottom;
+    final overlap = bottom - top;
+    if (overlap <= 0) return 0;
+    final minHeight = a.height < b.height ? a.height : b.height;
+    if (minHeight <= 0) return 0;
+    return overlap / minHeight;
   }
 
   /// Start markers of the product body in RT receipts.
@@ -308,7 +393,7 @@ class TransactionExtractor {
   /// Returns null when no body header exists (caller uses price lines).
   /// Returns possibly-empty when the header exists: the body is trusted
   /// and trailer junk stays out.
-  static List<SegmentedItem>? _bodyBlock(List<String> lines) {
+  static List<_Seg>? _bodyBlock(List<String> lines) {
     var start = -1;
     for (var i = 0; i < lines.length; i++) {
       // A totals line mentioning articles ("Subtotale articoli:") is a
@@ -320,7 +405,7 @@ class TransactionExtractor {
       }
     }
     if (start < 0) return null;
-    final items = <SegmentedItem>[];
+    final items = <_Seg>[];
     for (var i = start; i < lines.length; i++) {
       final line = lines[i].trim();
       if (_isBodyEnd(line)) break;
@@ -332,7 +417,7 @@ class TransactionExtractor {
         if (tokens.any((t) => t.length >= 2) &&
             tokens.any((t) => !_stopDescTokens.contains(t))) {
           items.add(
-            SegmentedItem(remainder, _parseItalianAmount(match.group(1)!)),
+            _Seg(remainder, _parseItalianAmount(match.group(1)!), i),
           );
         }
         continue;
@@ -340,14 +425,12 @@ class TransactionExtractor {
       if (_isBoundary(line) || _isMeta(line)) continue;
       final tokens = _letterTokens(line);
       if (tokens.any((t) => t.length >= 3) && !_allDigitHeavy(tokens)) {
-        items.add(SegmentedItem(line, null));
+        items.add(_Seg(line, null, i));
       }
     }
-    if (items.length <= 2 && items.every((e) => e.price == null)) {
-      final joined = items.map((e) => e.description).join(' ');
-      if (joined.isEmpty || joined.length > 200) return null;
-      return [SegmentedItem(joined, null)];
-    }
+    // Joining of priceless leftovers happens in segmentItems AFTER
+    // column pairing, so two-column rows keep their prices (Action)
+    // while split single products still join (Fenza).
     // Empty trusted body: fall back to price-anchored lines rather than
     // showing nothing (e.g. trailer-only "NUMERO DI ARTICOLI").
     if (items.isEmpty) return null;
@@ -367,18 +450,18 @@ class TransactionExtractor {
         .toList();
   }
 
-  static String? _nearestDescription(List<String> lines, int from) {
+  static int _nearestDescription(List<String> lines, int from) {
     var steps = 0;
     for (var i = from; i >= 0 && steps < 6; i--, steps++) {
       final line = lines[i];
-      if (_amount.hasMatch(line) || _isBoundary(line)) return null;
+      if (_amount.hasMatch(line) || _isBoundary(line)) return -1;
       // A description needs at least two real words: labels ("Prezzo"),
       // codes ("RT 45...") and fragments ("ale:") never qualify.
       final words = _letterTokens(line).where((t) => t.length >= 2).toList();
       if (words.length < 2 || _isMeta(line)) continue;
-      return line;
+      return i;
     }
-    return null;
+    return -1;
   }
 
   static double _parseItalianAmount(String raw) {

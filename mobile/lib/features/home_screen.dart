@@ -42,10 +42,18 @@ class HomeScreen extends StatelessWidget {
       );
       return;
     }
-    _handleOcrText(context, result.text);
+    _handleOcrText(
+      context,
+      result.text,
+      result.lines.map((l) => l.box).toList(),
+    );
   }
 
-  void _handleOcrText(BuildContext context, String text) {
+  void _handleOcrText(
+    BuildContext context,
+    String text, [
+    List<Rect?>? geometry,
+  ]) {
     // RT-only scope (ADR-0008): anything else gets an explicit error,
     // never garbage output.
     if (!isFiscalReceipt(text)) {
@@ -61,7 +69,7 @@ class HomeScreen extends StatelessWidget {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ResultScreen(
-          result: pipeline.run(text),
+          result: pipeline.run(text, geometry: geometry),
           feedback: feedback,
           pipeline: pipeline,
           history: history,
