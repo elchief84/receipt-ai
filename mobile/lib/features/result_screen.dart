@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/classify.dart';
 import '../core/feedback.dart';
@@ -109,6 +110,22 @@ class _ResultScreenState extends State<ResultScreen> {
           ),
           if (_showOcr)
             SelectableText(r.ocrText, key: const Key('ocrText')),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            key: const Key('copyOcr'),
+            onPressed: () async {
+              try {
+                await Clipboard.setData(ClipboardData(text: r.ocrText));
+              } catch (_) {}
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Testo OCR copiato')),
+                );
+              }
+            },
+            icon: const Icon(Icons.copy),
+            label: const Text('Copia testo OCR'),
+          ),
           const SizedBox(height: 16),
           Row(
             children: [

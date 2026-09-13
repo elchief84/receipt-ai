@@ -29,6 +29,7 @@ class HomeScreen extends StatelessWidget {
     if (image == null) return;
     if (!context.mounted) return;
     final result = await ocr.recognize(image.path);
+    debugPrint('[OCR-TEXT-START]\n${result.text}\n[OCR-TEXT-END]');
     if (!context.mounted) return;
     if (result.confidence < 0.5 || result.text.trim().length < 20) {
       ScaffoldMessenger.of(context).showSnackBar(
