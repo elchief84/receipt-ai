@@ -19,9 +19,12 @@ Il lookup memorizza e non generalizza: su merchant mai visti sbaglia tutto.
 Report: `ml/data/baseline_lookup_report.json`.
 
 ### Exp2 — TF-IDF + Logistic Regression
-
-`TfidfVectorizer(preprocessor=normalize_name, tokenizer=split, max_features=4000)`
-+ `LogisticRegression(C=4, max_iter=1000)`. Seed a 47 prodotti (tech: Smartphone/Cover; toys: Tavolino/Gioco).
+`TfidfVectorizer(tokenizer=stopwords-v2, max_features=4000)`
++ `LogisticRegression(C=4, max_iter=1000)`.
+Tokenizer `stopwords-v2`: stopword italiane + drop 1-char — senza, `il`/`l`/`di`
+diventano i pesi dominanti su vocabolari piccoli.
+Amazon in training è 50/50 shopping|technology (colonna `categories` nei seed):
+il merchant non decide mai da solo (ADR-0001).
 Ablation sullo stesso split:
 
 | features | accuracy | F1-macro |
@@ -54,8 +57,10 @@ non via nome merchant. Report: `ml/data/exp2/holdout_report.json`.
 `ml/data/exp2/classifier.json` (vocabolario 394 termini + idf + coef) con
 `tokenizer_spec: normalize_name+split-v1`. Inference replicata in Dart puro
 (parità testata in `tests/test_train.py`). Cfr. ADR-0006 (JSON, non TFLite).
-Spot-check: testo farmacia reale-like → health 99.5% (prima 53%);
-ordine Amazon misto (phone+cover+toy) → technology 63%.
+Spot-check su OCR reali:
+- farmacia reale-like → health 99.5%;
+- ordine Amazon misto da OCR vero (phone+cover+toy) → technology 84.5%
+  (prima groceries 58%: merchant fantasma Conad + stopword + Amazon=shopping).
 
 ## Confronto
 

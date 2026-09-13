@@ -114,7 +114,7 @@ class JsonLogisticClassifier implements Classifier {
   ClassificationResult classify(ClassificationInput input) {
     final text =
         '${input.merchantNormalized} ${input.merchantType} ${input.ocrText} ${input.items.join(' ')}';
-    final terms = normalizeName(text).split(' ');
+    final terms = tokenize(text);
     final vocab = (_model['vocabulary'] as Map).cast<String, int>();
     final idf = (_model['idf'] as List).cast<num>();
     final counts = <int, int>{};

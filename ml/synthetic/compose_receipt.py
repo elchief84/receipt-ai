@@ -57,10 +57,16 @@ def load_seeds(merchants_csv: str, products_csv: str, fixture: bool = False) -> 
     merchants = []
     with open(merchants_csv, encoding="utf-8") as f:
         for row in csv.DictReader(f):
+            cats = [
+                c.strip()
+                for c in (row.get("categories") or "").split("|")
+                if c.strip()
+            ]
             merchants.append(
                 {
                     "raw_name": row["raw_name"].strip(),
                     "merchant_type": row["merchant_type"].strip(),
+                    "categories": cats,
                 }
             )
     products_by_category: dict = {}
@@ -91,7 +97,14 @@ def compose_record(
 ) -> dict:
     merchant = _pick_merchant(rng, seeds["merchants"], force_merchant)
     mtype = merchant["merchant_type"]
-    category = force_category or default_category_for_merchant_type(mtype)
+    if force_category:
+        category = force_category
+    elif merchant.get("categories"):
+        # Ambiguous merchants (ADR-0001 Amazon case): the category comes
+        # from the items, never from the merchant name alone.
+        category = rng.choice(merchant["categories"])
+    else:
+        category = default_category_for_merchant_type(mtype)
 
     pool = seeds["products_by_category"].get(category) or [
         p

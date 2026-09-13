@@ -1,9 +1,7 @@
 """Experiment 2: TF-IDF + Logistic Regression with merchant-only ablation.
 
 Feature contract (must match the Dart port exactly):
-  1. normalize with ml.datasets.normalize.normalize_name
-  2. split on single spaces
-  3. tf-idf with smooth idf, l2 norm, sublinear off
+  tokenizer_spec stopwords-v2 -> ml.datasets.normalize.tokenize
 """
 
 import argparse
@@ -15,9 +13,9 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score
 
-from ml.datasets.normalize import normalize_name
+from ml.datasets.normalize import tokenize
 
-TOKENIZER_SPEC = "normalize_name+split-v1"
+TOKENIZER_SPEC = "stopwords-v2"
 
 
 def features_merchant_only(record: dict) -> str:
@@ -37,9 +35,7 @@ def features_full(record: dict) -> str:
 
 
 def _fit_predict(train_texts: list, train_labels: list, test_texts: list) -> dict:
-    vectorizer = TfidfVectorizer(
-        preprocessor=normalize_name, tokenizer=str.split, max_features=4000
-    )
+    vectorizer = TfidfVectorizer(tokenizer=tokenize, max_features=4000)
     clf = LogisticRegression(max_iter=1000, C=4.0)
     X_train = vectorizer.fit_transform(train_texts)
     clf.fit(X_train, train_labels)
@@ -57,7 +53,7 @@ def _fit_predict(train_texts: list, train_labels: list, test_texts: list) -> dic
 
 
 def predict_with_export(export: dict, text: str) -> str:
-    terms = normalize_name(text).split()
+    terms = tokenize(text)
     counts = Counter(t for t in terms if t in export["vocabulary"])
     weighted = {}
     for term, count in counts.items():

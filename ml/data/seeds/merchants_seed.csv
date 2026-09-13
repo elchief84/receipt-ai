@@ -1,23 +1,23 @@
-raw_name,merchant_type
-Conad Superstore,supermarket
-Esselunga,supermarket
-Coop Alleanza,supermarket
-Macelleria La Imperiale,food_shop
-Panetteria Il Forno,food_shop
-Pescheria Azzurra,food_shop
-Eni Stazione di Servizio,fuel
-IP Gruppo API,fuel
-Farmacia Comunale,pharmacy
-Pizzeria Da Michele,restaurant
-Bar Centrale,restaurant
-MediaWorld,electronics
-Unieuro,electronics
-OVS,clothes
-IKEA,home_store
-Decathlon,clothes
-Trenitalia,transport_service
-NH Hotel,hotel
-Poste Italiane,services
-Enel Energia,services
-Amazon,ecommerce
-Feltrinelli,other
+raw_name,merchant_type,categories
+Conad Superstore,supermarket,
+Esselunga,supermarket,
+Coop Alleanza,supermarket,
+Macelleria La Imperiale,food_shop,
+Panetteria Il Forno,food_shop,
+Pescheria Azzurra,food_shop,
+Eni Stazione di Servizio,fuel,
+IP Gruppo API,fuel,
+Farmacia Comunale,pharmacy,
+Pizzeria Da Michele,restaurant,
+Bar Centrale,restaurant,
+MediaWorld,electronics,
+Unieuro,electronics,
+OVS,clothes,
+IKEA,home_store,
+Decathlon,clothes,
+Trenitalia,transport_service,
+NH Hotel,hotel,
+Poste Italiane,services,
+Enel Energia,services,
+Amazon,ecommerce,shopping|technology
+Feltrinelli,other,

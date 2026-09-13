@@ -46,4 +46,8 @@ void main() {
     expect(defaultCategoryForMerchantType('ecommerce'), 'shopping');
     expect(defaultCategoryForMerchantType('unknown_type'), 'other');
   });
+
+  test('tokenize drops short tokens and stopwords like Python', () {
+    expect(tokenize('il latte e l pane di casa'), ['latte', 'pane', 'casa']);
+  });
 }

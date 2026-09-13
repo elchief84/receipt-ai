@@ -1,8 +1,9 @@
 from ml.datasets.normalize import (
     MERCHANT_TYPES,
-    normalize_name,
     abbreviate,
     default_category_for_merchant_type,
+    normalize_name,
+    tokenize,
 )
 
 
@@ -51,3 +52,7 @@ def test_default_category_mapping():
     assert default_category_for_merchant_type("services") == "services"
     assert default_category_for_merchant_type("ecommerce") == "shopping"
     assert default_category_for_merchant_type("unknown_type") == "other"
+
+
+def test_tokenize_drops_short_tokens_and_stopwords():
+    assert tokenize("il latte e l pane di casa") == ["latte", "pane", "casa"]

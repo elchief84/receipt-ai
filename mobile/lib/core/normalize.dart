@@ -76,8 +76,7 @@ const _deaccent = {
 
 /// Port of Python normalize_name: lowercase → deaccent → strip legal
 /// forms/addresses → drop punctuation → collapse → drop digit tokens.
-String normalizeName(String raw) {
-  var text = raw.toLowerCase();
+String normalizeName(String raw) {  var text = raw.toLowerCase();
   text = text.split('').map((c) => _deaccent[c] ?? c).join();
   text = text.replaceAll(
     RegExp(r'\b(s\.?r\.?l\.?|s\.?p\.?a\.?|s\.?a\.?s\.?|s\.?n\.?c\.?)\b'),
@@ -93,3 +92,26 @@ String normalizeName(String raw) {
       .join(' ');
   return text;
 }
+
+/// Italian stopwords — must match ml.datasets.normalize.IT_STOPWORDS.
+/// Tokenizer spec stopwords-v2.
+const itStopwords = {
+  'il', 'lo', 'la', 'i', 'gli', 'le', 'un', 'uno', 'una',
+  'di', 'a', 'da', 'in', 'con', 'su', 'per', 'tra', 'fra',
+  'del', 'dello', 'della', 'dei', 'degli', 'delle',
+  'al', 'allo', 'alla', 'ai', 'agli', 'alle',
+  'dal', 'dallo', 'dalla', 'dai', 'dagli', 'dalle',
+  'nel', 'nello', 'nella', 'nei', 'negli', 'nelle',
+  'sul', 'sullo', 'sulla', 'sui', 'sugli', 'sulle',
+  'col', 'coi', 'che', 'se', 'come', 'piu', 'meno',
+  'non', 'si', 'ci', 'ne', 'mio', 'tuo', 'suo', 'nostro', 'vostro',
+  'questo', 'questa', 'questi', 'queste', 'quello', 'quella',
+  'sono', 'hai', 'hanno', 'siamo', 'siete', 'era', 'erano', 'stato',
+  'l', 'e', 'ed', 'ma', 'o', 'od', 'anche', 'solo', 'gia',
+};
+
+/// Port of Python tokenize: normalize → split → drop 1-char → drop stopwords.
+List<String> tokenize(String text) => normalizeName(text)
+    .split(' ')
+    .where((t) => t.length >= 2 && !itStopwords.contains(t))
+    .toList();
