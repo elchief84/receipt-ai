@@ -8,6 +8,7 @@ import 'classify.dart';
 import 'extractor.dart';
 import 'merchant.dart';
 import 'normalize.dart';
+import 'receipt_layout.dart';
 
 class TransactionResult {
   TransactionResult({
@@ -22,6 +23,7 @@ class TransactionResult {
     required this.modelVersion,
     required this.ocrText,
     required this.items,
+    this.sumCheck,
     this.itemDetails = const [],
   });
   final String merchantRaw;
@@ -39,6 +41,11 @@ class TransactionResult {
   /// Item-level labels (ADR-0007). Empty when nothing informative.
   final List<ItemClassification> itemDetails;
 
+  /// Sum-check from the layout parser: true = item prices sum to total
+  /// (verified), false = mismatch ("da verificare" badge), null when
+  /// unverifiable (no priced items).
+  final bool? sumCheck;
+
   TransactionResult copyWith({String? category}) => TransactionResult(
     merchantRaw: merchantRaw,
     merchantNormalized: merchantNormalized,
@@ -52,6 +59,7 @@ class TransactionResult {
     ocrText: ocrText,
     items: items,
     itemDetails: itemDetails,
+    sumCheck: sumCheck,
   );
 }
 
@@ -70,7 +78,8 @@ class ReceiptPipeline {
     final lines = ocrText.split('\n').map((l) => l.trim()).toList();
     final merchant =
         normalizer.findInLines(lines) ?? normalizer.normalize(draft.merchantRaw);
-    final items = TransactionExtractor.segmentItems(lines, geometry);
+    final layout = ReceiptLayoutParser.parse(lines, geometry, draft.total);
+    final items = layout.items;
     final descriptions = items.map((e) => e.description).toList();
     final classification = classifier.classify(
       ClassificationInput(
@@ -94,6 +103,7 @@ class ReceiptPipeline {
       modelVersion: classification.modelVersion,
       ocrText: ocrText,
       items: descriptions,
+      sumCheck: layout.sumOk,
       itemDetails: _withSingleItemTotal(
         _classifyItems(
           classifier,

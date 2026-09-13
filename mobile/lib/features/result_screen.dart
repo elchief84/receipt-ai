@@ -100,6 +100,24 @@ class _ResultScreenState extends State<ResultScreen> {
             'Confidence $pct% (${levelFor(r.confidence).name})',
             key: const Key('confidence'),
           ),
+          if (r.sumCheck == true)
+            const Row(
+              key: Key('sumOk'),
+              children: [
+                Icon(Icons.check_circle, color: Colors.green, size: 16),
+                SizedBox(width: 4),
+                Text('Dettaglio verificato'),
+              ],
+            ),
+          if (r.sumCheck == false)
+            const Row(
+              key: Key('sumWarn'),
+              children: [
+                Icon(Icons.warning_amber, color: Colors.orange, size: 16),
+                SizedBox(width: 4),
+                Text('Dettaglio da verificare'),
+              ],
+            ),
           const SizedBox(height: 8),
           Text('Merchant: ${r.merchantNormalized} (${r.merchantType})'),
           Text('Date: ${r.date}'),
