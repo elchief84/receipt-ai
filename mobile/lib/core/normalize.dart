@@ -4,6 +4,7 @@ library;
 
 const merchantTypes = [
   'supermarket',
+  'food_shop',
   'fuel',
   'pharmacy',
   'restaurant',
@@ -31,6 +32,7 @@ const expenseCategories = [
 
 const _merchantTypeToCategory = {
   'supermarket': 'groceries',
+  'food_shop': 'groceries',
   'fuel': 'transport',
   'pharmacy': 'health',
   'restaurant': 'restaurants',

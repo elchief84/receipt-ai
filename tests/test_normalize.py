@@ -21,6 +21,7 @@ def test_normalize_collapses_spaces_and_punct():
 def test_merchant_types_is_closed_list():
     assert set(MERCHANT_TYPES) == {
         "supermarket",
+        "food_shop",
         "fuel",
         "pharmacy",
         "restaurant",
@@ -41,6 +42,7 @@ def test_abbreviate_uses_receipt_style():
 
 def test_default_category_mapping():
     assert default_category_for_merchant_type("supermarket") == "groceries"
+    assert default_category_for_merchant_type("food_shop") == "groceries"
     assert default_category_for_merchant_type("fuel") == "transport"
     assert default_category_for_merchant_type("pharmacy") == "health"
     assert default_category_for_merchant_type("restaurant") == "restaurants"

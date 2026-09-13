@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:receipt_ai/core/merchant.dart';
+import 'package:receipt_ai/core/normalize.dart';
 
 void main() {
   final normalizer = MerchantNormalizer({
@@ -22,5 +23,9 @@ void main() {
   test('unknown merchant falls back to other', () {
     final m = normalizer.normalize('Negozio Mai Visto XYZ');
     expect(m.merchantType, 'other');
+  });
+
+  test('food_shop maps to groceries category', () {
+    expect(defaultCategoryForMerchantType('food_shop'), 'groceries');
   });
 }

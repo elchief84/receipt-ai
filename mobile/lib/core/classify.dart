@@ -54,7 +54,7 @@ abstract class Classifier {
 /// Keyword fallback used when the JSON model asset is absent.
 class KeywordClassifier implements Classifier {
   static const _keywords = {
-    'groceries': ['pane', 'latte', 'pasta', 'supermercato', 'conad', 'esselunga'],
+    'groceries': ['pane', 'latte', 'pasta', 'supermercato', 'conad', 'esselunga', 'macelleria', 'carne', 'panetteria', 'pescheria'],
     'restaurants': ['pizza', 'ristorante', 'pizzeria', 'cappuccino', 'bar'],
     'transport': ['benzina', 'carburante', 'eni', 'pedaggio', 'trenitalia', 'biglietto'],
     'health': ['farmacia', 'dentifricio', 'parafarmacia'],

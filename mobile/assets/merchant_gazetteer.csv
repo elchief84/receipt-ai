@@ -2,6 +2,9 @@ raw_name,normalized_name,merchant_type,source
 Conad Superstore,conad superstore,supermarket,seed-2026-09-13
 Esselunga,esselunga,supermarket,seed-2026-09-13
 Coop Alleanza,coop alleanza,supermarket,seed-2026-09-13
+Macelleria La Imperiale,macelleria la imperiale,food_shop,seed-2026-09-13
+Panetteria Il Forno,panetteria il forno,food_shop,seed-2026-09-13
+Pescheria Azzurra,pescheria azzurra,food_shop,seed-2026-09-13
 Eni Stazione di Servizio,eni stazione di servizio,fuel,seed-2026-09-13
 IP Gruppo API,ip gruppo api,fuel,seed-2026-09-13
 Farmacia Comunale,farmacia comunale,pharmacy,seed-2026-09-13

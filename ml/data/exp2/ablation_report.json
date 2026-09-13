@@ -1,36 +1,39 @@
 {
-  "n_train": 7934,
-  "n_test": 2066,
+  "n_train": 8209,
+  "n_test": 1791,
   "train_merchants": [
     "amazon",
     "bar centrale",
-    "conad superstore",
     "coop alleanza",
-    "enel energia",
+    "decathlon",
     "eni stazione di servizio",
     "esselunga",
     "farmacia comunale",
+    "feltrinelli",
     "ikea",
     "ip gruppo api",
+    "macelleria la imperiale",
     "mediaworld",
+    "nh hotel",
+    "panetteria il forno",
+    "pescheria azzurra",
     "pizzeria da michele",
     "poste italiane",
-    "trenitalia",
-    "unieuro"
+    "trenitalia"
   ],
   "test_merchants": [
-    "decathlon",
-    "feltrinelli",
-    "nh hotel",
-    "ovs"
+    "conad superstore",
+    "enel energia",
+    "ovs",
+    "unieuro"
   ],
   "merchant_only": {
-    "accuracy": 0.0,
-    "f1_macro": 0.0
+    "accuracy": 0.24623115577889448,
+    "f1_macro": 0.09879032258064516
   },
   "full": {
-    "accuracy": 0.4898354307841239,
-    "f1_macro": 0.2
+    "accuracy": 1.0,
+    "f1_macro": 1.0
   },
   "labels": [
     "groceries",

@@ -10,6 +10,7 @@ import unicodedata
 
 MERCHANT_TYPES = [
     "supermarket",
+    "food_shop",
     "fuel",
     "pharmacy",
     "restaurant",
@@ -25,6 +26,7 @@ MERCHANT_TYPES = [
 
 _MERCHANT_TYPE_TO_CATEGORY = {
     "supermarket": "groceries",
+    "food_shop": "groceries",
     "fuel": "transport",
     "pharmacy": "health",
     "restaurant": "restaurants",
