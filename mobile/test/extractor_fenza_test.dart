@@ -32,15 +32,16 @@ const fenzaOcr =
     '13,60';
 
 void main() {
-  test('repro fenza: totale e data ok, zero item spazzatura', () {
+  test('repro fenza: totale e data ok, un unico item dal corpo', () {
     final draft = TransactionExtractor().extract(fenzaOcr);
     expect(draft.total, 13.60);
     expect(draft.date, '31/08/2026');
     final items = TransactionExtractor.segmentItems(
       fenzaOcr.split('\n').map((l) => l.trim()).toList(),
     );
-    // Prices live only in the totals block: no price-anchored item exists.
-    // Empty detail is correct; 3 garbage items was the bug.
-    expect(items, isEmpty);
+    // Prices print only in the totals block: the RT body block still
+    // names the purchase. Zero garbage items, one joined description.
+    expect(items, hasLength(1));
+    expect(items.first, contains('ALOVEX'));
   });
 }

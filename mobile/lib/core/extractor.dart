@@ -253,7 +253,64 @@ class TransactionExtractor {
       final above = _nearestDescription(lines, i - 1);
       if (above != null) items.add(above);
     }
+    // No price-anchored item: fall back to the receipt body block
+    // (RT layout standard: description header .. IVA/totals trailer).
+    if (items.isEmpty) items.addAll(_bodyItems(lines));
     return items;
+  }
+
+  /// Start markers of the product body in RT receipts.
+  static bool _isBodyStart(String line) {
+    return _letterTokens(line).any(
+      (t) =>
+          t.startsWith('descriz') ||
+          t == 'reparto' ||
+          t.startsWith('articol') ||
+          t == 'prodotto' ||
+          t == 'merce',
+    );
+  }
+
+  /// End markers of the product body: IVA summary, totals, payments.
+  /// Prefix-based so mangled OCR ("TTALE CONPLESSIVO") still ends the body.
+  static bool _isBodyEnd(String line) {
+    final tokens = _letterTokens(line).toSet();
+    return tokens.any(
+      (t) =>
+          t.startsWith('tot') ||
+          t.startsWith('tta') ||
+          t == 'iva' ||
+          t.startsWith('pagamento') ||
+          t.startsWith('importo') ||
+          t.startsWith('subtotale'),
+    );
+  }
+
+  /// Joined body lines as a single item: when prices print only in the
+  /// totals block, the body still names the purchase (pharmacy case).
+  /// Capped: a body is a description, not an essay.
+  static List<String> _bodyItems(List<String> lines) {
+    var start = -1;
+    for (var i = 0; i < lines.length; i++) {
+      if (_isBodyStart(lines[i])) {
+        start = i + 1;
+        break;
+      }
+    }
+    if (start < 0) return const [];
+    final body = <String>[];
+    for (var i = start; i < lines.length; i++) {
+      final line = lines[i].trim();
+      if (_isBodyEnd(line)) break;
+      if (line.startsWith('*')) continue;
+      if (_letterTokens(line).any((t) => t.length >= 3) &&
+          !_isMeta(line)) {
+        body.add(line);
+      }
+    }
+    final joined = body.join(' ');
+    if (joined.isEmpty || joined.length > 200) return const [];
+    return [joined];
   }
 
   static List<String> _letterTokens(String text) {
