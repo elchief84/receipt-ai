@@ -85,6 +85,8 @@ class TransactionExtractor {
     'telefono',
     'cliente',
     'rt', // matricola line, never a product
+    'documento',
+    'commerciale',
   };
 
   static bool _isMeta(String line) {
@@ -237,6 +239,12 @@ class TransactionExtractor {
   /// same line or on the price line below it. Null price for body-block
   /// items (totals-only receipts like Fenza).
   static List<SegmentedItem> segmentItems(List<String> lines) {
+    // Body-first: when the receipt names its products in a body block
+    // (ARTICOLI .. TOTALE), the body IS the item list — trailer prices
+    // must not attach header junk ("Auth. code"). Without a body block,
+    // fall back to price-anchored lines (inline "LATTE 1.49").
+    final body = _bodyBlock(lines);
+    if (body != null) return body;
     final items = <SegmentedItem>[];
     for (var i = 0; i < lines.length; i++) {
       final line = lines[i];
@@ -263,9 +271,6 @@ class TransactionExtractor {
       final above = _nearestDescription(lines, i - 1);
       if (above != null) items.add(SegmentedItem(above, price));
     }
-    // No price-anchored item: fall back to the receipt body block
-    // (RT layout standard: description header .. IVA/totals trailer).
-    if (items.isEmpty) items.addAll(_bodyItems(lines));
     return items;
   }
 
@@ -296,32 +301,62 @@ class TransactionExtractor {
     );
   }
 
-  /// Joined body lines as a single item: when prices print only in the
-  /// totals block, the body still names the purchase (pharmacy case).
-  /// Capped: a body is a description, not an essay.
-  static List<SegmentedItem> _bodyItems(List<String> lines) {
+  /// Body block: product lines between the description header and the
+  /// IVA/totals trailer. Lines carrying their own amount keep their
+  /// price; the rest are descriptions. A body of <= 2 priceless lines is
+  /// one product split across lines (Fenza) and gets joined.
+  /// Returns null when no body header exists (caller uses price lines).
+  /// Returns possibly-empty when the header exists: the body is trusted
+  /// and trailer junk stays out.
+  static List<SegmentedItem>? _bodyBlock(List<String> lines) {
     var start = -1;
     for (var i = 0; i < lines.length; i++) {
+      // A totals line mentioning articles ("Subtotale articoli:") is a
+      // trailer, never a body header.
+      if (_isBodyEnd(lines[i]) || _isBoundary(lines[i])) continue;
       if (_isBodyStart(lines[i])) {
         start = i + 1;
         break;
       }
     }
-    if (start < 0) return const [];
-    final body = <String>[];
+    if (start < 0) return null;
+    final items = <SegmentedItem>[];
     for (var i = start; i < lines.length; i++) {
       final line = lines[i].trim();
       if (_isBodyEnd(line)) break;
       if (line.startsWith('*')) continue;
-      if (_letterTokens(line).any((t) => t.length >= 3) &&
-          !_isMeta(line)) {
-        body.add(line);
+      final match = _amount.firstMatch(line);
+      if (match != null) {
+        final remainder = line.replaceFirst(match.group(0)!, '').trim();
+        final tokens = _letterTokens(remainder);
+        if (tokens.any((t) => t.length >= 2) &&
+            tokens.any((t) => !_stopDescTokens.contains(t))) {
+          items.add(
+            SegmentedItem(remainder, _parseItalianAmount(match.group(1)!)),
+          );
+        }
+        continue;
+      }
+      if (_isBoundary(line) || _isMeta(line)) continue;
+      final tokens = _letterTokens(line);
+      if (tokens.any((t) => t.length >= 3) && !_allDigitHeavy(tokens)) {
+        items.add(SegmentedItem(line, null));
       }
     }
-    final joined = body.join(' ');
-    if (joined.isEmpty || joined.length > 200) return const [];
-    return [SegmentedItem(joined, null)];
+    if (items.length <= 2 && items.every((e) => e.price == null)) {
+      final joined = items.map((e) => e.description).join(' ');
+      if (joined.isEmpty || joined.length > 200) return null;
+      return [SegmentedItem(joined, null)];
+    }
+    // Empty trusted body: fall back to price-anchored lines rather than
+    // showing nothing (e.g. trailer-only "NUMERO DI ARTICOLI").
+    if (items.isEmpty) return null;
+    return items;
   }
+
+  static bool _allDigitHeavy(List<String> tokens) =>
+      tokens.isNotEmpty &&
+      tokens.every((t) => RegExp(r'\d').hasMatch(t));
 
   static List<String> _letterTokens(String text) {
     return text

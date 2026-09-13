@@ -47,8 +47,9 @@ class ClassificationResult {
   ConfidenceLevel get level => levelFor(confidence);
 }
 
-/// Per-item label (ADR-0007): secondary signal, shown only when the line
-/// carries enough text and the model is at least medium-confident.
+/// Per-item label (ADR-0007): secondary signal. Category is null when the
+/// model is low-confidence — the row still shows (description + price),
+/// because on segmented products even an unlabeled row informs.
 class ItemClassification {
   ItemClassification({
     required this.description,
@@ -57,7 +58,7 @@ class ItemClassification {
     this.price,
   });
   final String description;
-  final String category;
+  final String? category;
   final double confidence;
 
   /// Item price from segmentation; null when prices print only in totals.

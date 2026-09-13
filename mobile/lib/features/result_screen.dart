@@ -107,21 +107,26 @@ class _ResultScreenState extends State<ResultScreen> {
             const SizedBox(height: 8),
             const Text('Dettaglio items'),
             ...r.itemDetails.asMap().entries.map(
-              (e) => ListTile(
-                key: Key('itemDetail-${e.key}'),
-                dense: true,
-                title: Text(
-                  e.value.description,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: Text(
-                  e.value.price != null
-                      ? '€${e.value.price!.toStringAsFixed(2)} · ${e.value.category}'
-                      : e.value.category,
-                  key: Key('itemDetail-price-${e.key}'),
-                ),
-              ),
+              (e) {
+                final parts = <String>[];
+                if (e.value.price != null) {
+                  parts.add('€${e.value.price!.toStringAsFixed(2)}');
+                }
+                if (e.value.category != null) parts.add(e.value.category!);
+                return ListTile(
+                  key: Key('itemDetail-${e.key}'),
+                  dense: true,
+                  title: Text(
+                    e.value.description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: Text(
+                    parts.join(' · '),
+                    key: Key('itemDetail-price-${e.key}'),
+                  ),
+                );
+              },
             ),
           ],
           TextButton(

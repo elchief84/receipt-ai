@@ -123,9 +123,8 @@ class ReceiptPipeline {
     ];
   }
 
-  /// One model call per line, same artifact. A line earns a label only
-  /// with informative tokens and at least medium confidence —
-  /// junk lines ("41", "E", "Stampa") stay unlabeled.
+  /// One model call per line, same artifact. Every segmented line is
+  /// shown; the label lands only at medium+ confidence (null otherwise).
   static List<ItemClassification> _classifyItems(
     Classifier classifier, {
     required String merchantType,
@@ -146,11 +145,10 @@ class ReceiptPipeline {
           items: [line],
         ),
       );
-      if (res.level == ConfidenceLevel.low) continue;
       details.add(
         ItemClassification(
           description: line,
-          category: res.category,
+          category: res.level == ConfidenceLevel.low ? null : res.category,
           confidence: res.confidence,
           price: item.price,
         ),
