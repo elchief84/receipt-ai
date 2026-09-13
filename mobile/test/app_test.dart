@@ -77,7 +77,7 @@ void main() {
     expect(feedback.entries.last.correctedCategory, 'shopping');
   });
 
-  testWidgets('amazon generic sample shows shopping item details', (
+  testWidgets('macelleria sample shows groceries item details', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -90,11 +90,34 @@ void main() {
         ),
       ),
     );
-    await tester.tap(find.byKey(const Key('sample-Amazon Generic')));
+    await tester.tap(find.byKey(const Key('sample-Macelleria')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('itemDetail-0')), findsOneWidget);
-    expect(find.textContaining('shopping'), findsWidgets);
+    expect(find.textContaining('groceries'), findsWidgets);
+  });
+
+  testWidgets('unsupported document shows error, no result', (tester) async {
+    const unsupported = (
+      name: 'Amazon',
+      text: 'Riepilogo dell\'ordine\nVenduto da: Amazon.it\nTotale: 10,00',
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HomeScreen(
+          pipeline: testPipeline(),
+          ocr: FakeOcrEngine(''),
+          feedback: InMemoryFeedbackLog(),
+          history: HistoryLog(),
+          samples: const [unsupported],
+        ),
+      ),
+    );
+    await tester.tap(find.byKey(const Key('sample-Amazon')));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Documento non supportato'), findsOneWidget);
+    expect(find.byKey(const Key('total')), findsNothing);
   });
 }
 

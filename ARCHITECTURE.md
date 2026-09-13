@@ -1,6 +1,7 @@
 # ARCHITECTURE.md — Receipt AI MVP on-device
 
 > Supersede: PROJECT.md §11–12 (niente API server in MVP). Training in Python offline, inference 100% on-device. Cfr. ADR-0001, 0003, 0004, 0005.
+> Scope: solo scontrini fiscali RT italiani; resto rifiutato con errore esplicito (ADR-0008).
 
 ## 1. Pipeline
 

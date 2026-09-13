@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../core/document_gate.dart';
 import '../core/feedback.dart';
 import '../core/history.dart';
 import '../core/ocr.dart';
@@ -16,12 +17,14 @@ class HomeScreen extends StatelessWidget {
     required this.ocr,
     required this.feedback,
     required this.history,
+    this.samples = sampleReceipts,
   });
 
   final ReceiptPipeline pipeline;
   final OcrEngine ocr;
   final FeedbackLog feedback;
   final HistoryLog history;
+  final List<({String name, String text})> samples;
 
   Future<void> _fromImage(BuildContext context, ImageSource source) async {
     final picker = ImagePicker();
@@ -39,19 +42,22 @@ class HomeScreen extends StatelessWidget {
       );
       return;
     }
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ResultScreen(
-          result: pipeline.run(result.text),
-          feedback: feedback,
-          pipeline: pipeline,
-          history: history,
-        ),
-      ),
-    );
+    _handleOcrText(context, result.text);
   }
 
-  void _fromSample(BuildContext context, String text) {
+  void _handleOcrText(BuildContext context, String text) {
+    // RT-only scope (ADR-0008): anything else gets an explicit error,
+    // never garbage output.
+    if (!isFiscalReceipt(text)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Documento non supportato: fotografa uno scontrino fiscale italiano',
+          ),
+        ),
+      );
+      return;
+    }
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ResultScreen(
@@ -97,12 +103,12 @@ class HomeScreen extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           const Text('Use sample receipt'),
-          ...sampleReceipts.map(
+          ...samples.map(
             (s) => ListTile(
               key: Key('sample-${s.name}'),
               title: Text(s.name),
               trailing: const Icon(Icons.chevron_right),
-              onTap: () => _fromSample(context, s.text),
+              onTap: () => _handleOcrText(context, s.text),
             ),
           ),
         ],

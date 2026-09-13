@@ -206,6 +206,9 @@ class TransactionExtractor {
     'contanti',
     'contante',
     'euro',
+    'iva',
+    'cui',
+    'di',
   };
 
   /// Section boundary: totals, change, cashier — never climb past these.
@@ -271,8 +274,7 @@ class TransactionExtractor {
     return null;
   }
 
-  static double _parseItalianAmount(String raw) {
-    // "1.234,56" -> 1234.56 ; "10.60" -> 10.60 ; "10,60" -> 10.60
+  static double _parseItalianAmount(String raw) {    // "1.234,56" -> 1234.56 ; "10.60" -> 10.60 ; "10,60" -> 10.60
     if (raw.contains(',')) {
       return double.tryParse(raw.replaceAll('.', '').replaceAll(',', '.')) ??
           0.0;
