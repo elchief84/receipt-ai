@@ -3,3 +3,5 @@ off_italy_products.parquet,ml/data/seeds/products_seed.csv (hand-listed public p
 merchant_gazetteer.csv,ml/data/seeds/merchants_seed.csv (hand-listed public merchant names; full run: OpenStreetMap ODbL),seed-2026-09-13,19,"seed rows are hand-written from public knowledge; full OSM run requires (c) OpenStreetMap contributors (ODbL)"
 synth_it_10k.jsonl,compose_receipt.py seed=42 from seeds above,seed-42,10000,derived synthetic — no personal data
 baseline_lookup_report.json,evaluate.py seed=42 test-ratio=0.2 (per-merchant split),exp1,2131 test / 7869 train,"accuracy=0.000 f1_macro=0.000 on unknown merchants — lookup memorizes, does not generalize (ADR-0001)"
+exp2/classifier.json,train_logreg.py seed=42 test-ratio=0.2 on synth_it_10k,exp2-2026-09-13,245 terms / 48KB,derived weights — Tokenizer normalize_name+split-v1 (ADR-0006, no personal data)
+exp2/ablation_report.json,evaluate seed=42 (per-merchant split),exp2,2131 test / 7869 train,"merchant_only acc=0.000 f1=0.000 / full acc=0.490 f1=0.200"
