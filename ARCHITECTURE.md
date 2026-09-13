@@ -27,7 +27,7 @@ Ogni stage è un'interfaccia Dart sostituibile. Nessuna chiamata rete.
 - `core/parsing`: `TransactionExtractor` — regex IT (`TOTALE`, `SUBTOTALE`, `IVA 22%`, date `dd/mm/yyyy`, importi `€1.234,56` → normalizzati).
 - `core/merchant`: `MerchantNormalizer` + `assets/merchant_gazetteer.csv` (da OSM, cfr. DATASETS.md) + lista chiusa merchant_type:
   `supermarket, fuel, pharmacy, restaurant, clothes, home_store, electronics, hotel, transport_service, services, ecommerce, other`.
-- `core/classify`: `Classifier` → TFLite (`assets/classifier.tflite` + `assets/vectorizer.json`) + fallback keyword scoring. Interfaccia stabile:
+- `core/classify`: `Classifier` → JSON logistico embedded (`assets/classifier.json`, cfr. ADR-0006) + fallback keyword scoring. Interfaccia stabile:
   `classify({merchant, merchant_type, ocr_text, items}) → {category, confidence, model_version}`.
 - `features/result`: merchant, date, total, category, confidence% + [Correct] [Change category].
 - `features/summary`: This month per categoria, chart semplice.
@@ -52,7 +52,7 @@ Regola rigida: per `shopping / technology / leisure_travel` il merchant da solo 
 
 ```
 /ml/{datasets,synthetic,training,evaluation}  # python offline, niente server
-/mobile/{lib/{core,features},assets/{classifier.tflite,vectorizer.json,merchant_gazetteer.csv,samples},test}
+/mobile/{lib/{core,features},assets/{classifier.json,merchant_gazetteer.csv},test}
   # flutter, tutto on-device
 /samples/          # esempi pubblici con SOURCES.csv
 /docs/adr/         # decisioni (0001–0005)
