@@ -11,10 +11,14 @@ class SegmentedItem {
 
 /// Internal item with the source line index, for geometry pairing.
 class _Seg {
-  _Seg(this.description, this.price, this.src);
+  _Seg(this.description, this.price, this.src, {this.bare = false});
   String description;
   double? price;
   final int src;
+
+  /// True when the price came from a bare amount line (no same-line
+  /// description): the description lives in the neighbours.
+  final bool bare;
 }
 
 class TransactionDraft {
@@ -269,12 +273,21 @@ class TransactionExtractor {
         if (found != null) segs.add(found);
       }
     }
+    // Lines absorbed by pairing/merging belong to their item already,
+    // as do the items' own source lines: track them so adjacency never
+    // attaches them twice.
+    final consumed = segs.map((s) => s.src).toSet();
     if (boxesForPairing != null) {
-      _pairColumns(segs, lines, boxesForPairing);
-      _mergeFragments(segs, boxesForPairing);
+      _pairColumns(segs, lines, boxesForPairing, consumed);
+      _mergeFragments(segs, boxesForPairing, consumed);
     }
+    // Consumed-line guard inside makes this safe on body segs too:
+    // neighbouring items stop the walk.
+    _attachAdjacent(segs, lines, consumed);
+    // Drop priced lines that never earned a description.
+    segs.removeWhere((s) => s.description.trim().isEmpty);
     // Leftover priceless few: one product split across lines (Fenza).
-    // Pairing runs first so two-column rows keep their prices.
+    // Grouping runs first so priced rows keep their shape.
     if (segs.length <= 2 && segs.isNotEmpty && segs.every((e) => e.price == null)) {
       final joined = segs.map((e) => e.description).join(' ');
       if (joined.isNotEmpty && joined.length <= 200) {
@@ -307,8 +320,85 @@ class TransactionExtractor {
       return _Seg(remainder, price, i);
     }
     final above = _nearestDescription(lines, i - 1);
-    if (above >= 0) return _Seg(lines[above], price, above);
-    return null;
+    if (above >= 0) return _Seg(lines[above], price, above, bare: true);
+    // No description above: keep an empty bare seg so the adjacency pass
+    // can still claim orphan lines below/around it. Dropped if still
+    // empty at the end.
+    return _Seg('', price, i, bare: true);
+  }
+
+  /// Adjacency grouping (the "trivial algorithm"): a priced line claims
+  /// the priceless description lines around it.
+  /// - bare price: every informative priceless line above, back to a stop
+  ///   (amount / meta / boundary / asterisk / another item, max 6 lines);
+  /// - inline price: short (< 15 chars) fragment lines below, down to a
+  ///   stop (max 3 lines).
+  /// Attached lines are marked consumed so no line joins two items.
+  static void _attachAdjacent(
+    List<_Seg> segs,
+    List<String> lines,
+    Set<int> consumed,
+  ) {
+    for (final seg in segs) {
+      if (seg.price == null) continue;
+      if (seg.bare) {
+        // Backward run: claim informative priceless lines above (2+ real
+        // words, like the above-search bar). Single labels ("Prezzo")
+        // do not qualify.
+        final parts = <String>[];
+        var steps = 0;
+        for (var i = seg.src - 1; i >= 0 && steps < 6; i--, steps++) {
+          final line = lines[i];
+          if (_amount.hasMatch(line) ||
+              _isBoundary(line) ||
+              _isMeta(line) ||
+              line.trimLeft().startsWith('*') ||
+              consumed.contains(i)) {
+            break;
+          }
+          if (_informative2(line)) {
+            parts.add(line);
+            consumed.add(i);
+          }
+        }
+        if (parts.isNotEmpty) {
+          seg.description =
+              '${parts.reversed.join(' ')} ${seg.description}'.trim();
+        }
+      } else {
+        final parts = <String>[];
+        var steps = 0;
+        for (var i = seg.src + 1;
+            i < lines.length && steps < 3;
+            i++, steps++) {
+          final line = lines[i];
+          if (_amount.hasMatch(line) ||
+              _isBoundary(line) ||
+              _isMeta(line) ||
+              line.trimLeft().startsWith('*') ||
+              consumed.contains(i)) {
+            break;
+          }
+          if (line.trim().length >= 15) break;
+          if (_informative(line)) {
+            parts.add(line);
+            consumed.add(i);
+          }
+        }
+        if (parts.isNotEmpty) {
+          seg.description = '${seg.description} ${parts.join(' ')}'.trim();
+        }
+      }
+    }
+  }
+
+  static bool _informative(String line) {
+    return _letterTokens(line).any((t) => t.length >= 2);
+  }
+
+  /// Description-grade: at least two real words.
+  static bool _informative2(String line) {
+    return _letterTokens(line).where((t) => t.length >= 2).length >= 2;
   }
 
   /// Two-column pairing: bare amounts join every priceless description
@@ -320,6 +410,7 @@ class TransactionExtractor {
     List<_Seg> segs,
     List<String> lines,
     List<Rect?> boxes,
+    Set<int> consumed,
   ) {
     for (var i = 0; i < lines.length; i++) {
       final box = boxes[i];
@@ -349,6 +440,7 @@ class TransactionExtractor {
       first.price = _parseItalianAmount(match.group(1)!);
       for (final dup in group.skip(1)) {
         segs.remove(dup);
+        consumed.add(dup.src);
       }
     }
   }
@@ -357,7 +449,11 @@ class TransactionExtractor {
   /// its continuation ("plast ica" under "disney palla di nat"), not a
   /// new product. Needs boxes (gap measurement); without them the rows
   /// stay split. Cascades: merged blobs absorb further fragments.
-  static void _mergeFragments(List<_Seg> segs, List<Rect?> boxes) {
+  static void _mergeFragments(
+    List<_Seg> segs,
+    List<Rect?> boxes,
+    Set<int> consumed,
+  ) {
     for (var k = segs.length - 1; k > 0; k--) {
       final cur = segs[k];
       if (cur.price != null) continue;
@@ -370,6 +466,7 @@ class TransactionExtractor {
       prev.description = '${prev.description} ${cur.description}';
       prev.price ??= cur.price;
       segs.removeAt(k);
+      consumed.add(cur.src);
     }
   }
 
