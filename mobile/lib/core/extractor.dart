@@ -61,9 +61,9 @@ class TransactionExtractor {
   }
 
   /// Last total-keyword line wins (receipts put TOTALE at the bottom);
-  /// SUBTOTALE lines are ignored; a bare TOTALE reads the next line.
-  /// Fallback with no keyword at all (OCR ate it): last amount of the
-  /// receipt, skipping RESTO lines. A wrong guess beats a 0.00 lie.
+  /// SUBTOTALE lines are ignored; a bare TOTALE scans the next lines.
+  /// Fallback with no usable keyword amount (OCR ate it): last amount of
+  /// the receipt, skipping RESTO lines. A wrong guess beats a 0.00 lie.
   static double _findTotal(List<String> lines) {
     var total = 0.0;
     var found = false;
@@ -78,22 +78,40 @@ class TransactionExtractor {
           .toList();
       if (amounts.isNotEmpty) {
         total = amounts.last;
-      } else if (i + 1 < lines.length) {
-        final next = _amount.firstMatch(lines[i + 1]);
-        if (next != null) total = _parseItalianAmount(next.group(1)!);
+      } else {
+        final next = _firstAmountInNextLines(lines, i + 1, 4);
+        if (next != null) total = next;
       }
     }
-    if (!found) {
-      for (var i = lines.length - 1; i >= 0; i--) {
-        if (_resto.hasMatch(lines[i].toUpperCase())) continue;
-        final amounts = _amount
-            .allMatches(lines[i])
-            .map((m) => _parseItalianAmount(m.group(1)!))
-            .toList();
-        if (amounts.isNotEmpty) return amounts.last;
-      }
+    if (!found || total == 0.0) {
+      final fallback = _lastAmountSkippingResto(lines);
+      if (fallback != null) return fallback;
     }
     return total;
+  }
+
+  static double? _firstAmountInNextLines(
+    List<String> lines,
+    int from,
+    int count,
+  ) {
+    for (var i = from; i < lines.length && i < from + count; i++) {
+      final match = _amount.firstMatch(lines[i]);
+      if (match != null) return _parseItalianAmount(match.group(1)!);
+    }
+    return null;
+  }
+
+  static double? _lastAmountSkippingResto(List<String> lines) {
+    for (var i = lines.length - 1; i >= 0; i--) {
+      if (_resto.hasMatch(lines[i].toUpperCase())) continue;
+      final amounts = _amount
+          .allMatches(lines[i])
+          .map((m) => _parseItalianAmount(m.group(1)!))
+          .toList();
+      if (amounts.isNotEmpty) return amounts.last;
+    }
+    return null;
   }
 
   static double _parseItalianAmount(String raw) {
