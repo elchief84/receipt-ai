@@ -43,4 +43,28 @@ void main() {
     expect(items[1].price, 3.99);
     expect(items[2].price, 2.99);
   });
+
+  test('desc lines sharing one price row join into a single item', () {
+    const ls = [
+      'ARTICOLI',
+      'disney palla di nat',
+      'plast ica',
+      'ventosa singola',
+      'TOTALE',
+      '7,95',
+    ];
+    final boxes = [
+      const Rect.fromLTWH(0, 0, 100, 10),
+      const Rect.fromLTWH(0, 10, 60, 10),
+      const Rect.fromLTWH(0, 20, 60, 10),
+      const Rect.fromLTWH(0, 30, 60, 10),
+      const Rect.fromLTWH(0, 50, 60, 10),
+      const Rect.fromLTWH(70, 15, 30, 10),
+    ];
+    final items = TransactionExtractor.segmentItems(ls, boxes);
+    expect(items.map((e) => e.description).toList(), hasLength(2));
+    expect(items[0].description, 'disney palla di nat plast ica');
+    expect(items[0].price, 7.95);
+    expect(items[1].price, isNull);
+  });
 }

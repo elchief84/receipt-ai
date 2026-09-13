@@ -310,9 +310,11 @@ class TransactionExtractor {
     return null;
   }
 
-  /// Two-column pairing: a bare amount on the same visual row as a
-  /// priceless description belongs to it (Action layout). Totals and
-  /// IVA amounts sit below the descriptions, so geometry excludes them.
+  /// Two-column pairing: bare amounts join every priceless description
+  /// on the same visual row into ONE item (multi-line product names).
+  /// Totals and IVA amounts sit below the descriptions, so geometry
+  /// excludes them. Threshold 0.3 (not 0.5): a price straddling two
+  /// desc rows overlaps each only partially.
   static void _pairColumns(
     List<_Seg> segs,
     List<String> lines,
@@ -331,20 +333,21 @@ class TransactionExtractor {
       if (_totalKeyword.hasMatch(keyForm) || _subtotal.hasMatch(keyForm)) {
         continue;
       }
-      _Seg? best;
-      var bestOverlap = 0.5;
+      final group = <_Seg>[];
       for (final seg in segs) {
         if (seg.price != null) continue;
         final other = boxes[seg.src];
         if (other == null) continue;
-        final overlap = _yOverlap(box, other);
-        if (overlap > bestOverlap) {
-          bestOverlap = overlap;
-          best = seg;
-        }
+        if (_yOverlap(box, other) >= 0.3) group.add(seg);
       }
-      if (best != null) {
-        best.price = _parseItalianAmount(match.group(1)!);
+      if (group.isEmpty) continue;
+      group.sort((a, b) => a.src.compareTo(b.src));
+      final first = group.first;
+      first.description =
+          group.map((s) => s.description).join(' ');
+      first.price = _parseItalianAmount(match.group(1)!);
+      for (final dup in group.skip(1)) {
+        segs.remove(dup);
       }
     }
   }
