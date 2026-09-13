@@ -18,10 +18,12 @@ class TransactionDraft {
 
 class TransactionExtractor {
   static final _date = RegExp(r'(\d{2})[/\-.](\d{2})[/\-.](\d{4})');
-  static final _total = RegExp(
-    r'(?:TOTALE|TOTAL|IMPORTO|TOT)\s*€?\s*(\d[\d.]*(?:[,.]\d{2}))',
+  static final _totalKeyword = RegExp(
+    r'\b(TOTALE|TOTAL|IMPORTO)\b',
     caseSensitive: false,
   );
+  static final _subtotal = RegExp(r'SUB\s*TOT', caseSensitive: false);
+  static final _amount = RegExp(r'(\d[\d.]*(?:[,.]\d{2}))');
 
   TransactionDraft extract(String ocrText) {
     final lines = ocrText
@@ -38,19 +40,34 @@ class TransactionExtractor {
           '${dateMatch.group(1)}/${dateMatch.group(2)}/${dateMatch.group(3)}';
     }
 
-    var total = 0.0;
-    final totalMatch = _total.firstMatch(ocrText);
-    if (totalMatch != null) {
-      total = _parseItalianAmount(totalMatch.group(1)!);
-    }
-
     return TransactionDraft(
       merchantRaw: merchantRaw,
       date: date,
-      total: total,
+      total: _findTotal(lines),
       currency: 'EUR',
       ocrText: ocrText,
     );
+  }
+
+  /// Last total-keyword line wins (receipts put TOTALE at the bottom);
+  /// SUBTOTALE lines are ignored; a bare TOTALE reads the next line.
+  static double _findTotal(List<String> lines) {
+    var total = 0.0;
+    for (var i = 0; i < lines.length; i++) {
+      final line = lines[i];
+      if (!_totalKeyword.hasMatch(line) || _subtotal.hasMatch(line)) continue;
+      final amounts = _amount
+          .allMatches(line)
+          .map((m) => _parseItalianAmount(m.group(1)!))
+          .toList();
+      if (amounts.isNotEmpty) {
+        total = amounts.last;
+      } else if (i + 1 < lines.length) {
+        final next = _amount.firstMatch(lines[i + 1]);
+        if (next != null) total = _parseItalianAmount(next.group(1)!);
+      }
+    }
+    return total;
   }
 
   static double _parseItalianAmount(String raw) {

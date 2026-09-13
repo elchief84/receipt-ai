@@ -1,6 +1,6 @@
 {
-  "n_train": 7869,
-  "n_test": 2131,
+  "n_train": 7934,
+  "n_test": 2066,
   "train_merchants": [
     "amazon",
     "bar centrale",
@@ -29,7 +29,7 @@
     "f1_macro": 0.0
   },
   "full": {
-    "accuracy": 0.4899108399812295,
+    "accuracy": 0.4898354307841239,
     "f1_macro": 0.2
   },
   "labels": [

@@ -98,7 +98,11 @@ class JsonLogisticClassifier implements Classifier {
     String assetPath,
     String version,
   ) async {
-    final raw = await rootBundle.loadString(assetPath);
+    // NB: rootBundle.load (not loadString): loadString offloads >10KB
+    // decoding to an isolate via compute(), which hangs under flutter test.
+    // Synchronous utf8.decode of a ~100KB asset costs single-digit ms.
+    final data = await rootBundle.load(assetPath);
+    final raw = utf8.decode(data.buffer.asUint8List());
     return JsonLogisticClassifier(json.decode(raw), version);
   }
 

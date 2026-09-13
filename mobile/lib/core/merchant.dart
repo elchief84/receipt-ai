@@ -1,6 +1,8 @@
 /// Merchant normalization against the embedded OSM gazetteer.
 library;
 
+import 'dart:convert';
+
 import 'package:flutter/services.dart' show rootBundle;
 
 import 'normalize.dart';
@@ -23,7 +25,9 @@ class MerchantNormalizer {
   final Map<String, String> _gazetteer;
 
   static Future<MerchantNormalizer> fromAssets(String assetPath) async {
-    final csv = await rootBundle.loadString(assetPath);
+    // NB: rootBundle.load (not loadString), see JsonLogisticClassifier.
+    final data = await rootBundle.load(assetPath);
+    final csv = utf8.decode(data.buffer.asUint8List());
     final map = <String, String>{};
     for (final line in csv.split('\n').skip(1)) {
       final parts = line.split(',');

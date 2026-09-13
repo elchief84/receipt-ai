@@ -21,7 +21,9 @@ Report: `ml/data/baseline_lookup_report.json`.
 ### Exp2 — TF-IDF + Logistic Regression
 
 `TfidfVectorizer(preprocessor=normalize_name, tokenizer=split, max_features=4000)`
-+ `LogisticRegression(C=4, max_iter=1000)`. Ablation sullo stesso split:
++ `LogisticRegression(C=4, max_iter=1000)`. Seed esteso a 39 prodotti con
+parole reali da scontrino (Moment, Ticket, Coperto, Pedaggio...).
+Ablation sullo stesso split:
 
 | features | accuracy | F1-macro |
 |----------|----------|----------|
@@ -50,9 +52,10 @@ non via nome merchant. Report: `ml/data/exp2/holdout_report.json`.
 
 ## Modello embedded
 
-`ml/data/exp2/classifier.json` (48KB: vocabulary 245 termini + idf + coef) con
+`ml/data/exp2/classifier.json` (vocabolario 394 termini + idf + coef) con
 `tokenizer_spec: normalize_name+split-v1`. Inference replicata in Dart puro
 (parità testata in `tests/test_train.py`). Cfr. ADR-0006 (JSON, non TFLite).
+Spot-check: testo farmacia reale-like → health 99.5% (prima 53%).
 
 ## Confronto
 

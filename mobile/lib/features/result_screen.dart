@@ -26,6 +26,7 @@ class ResultScreen extends StatefulWidget {
 
 class _ResultScreenState extends State<ResultScreen> {
   late String _category;
+  var _showOcr = false;
 
   @override
   void initState() {
@@ -101,6 +102,13 @@ class _ResultScreenState extends State<ResultScreen> {
           const SizedBox(height: 8),
           Text('Merchant: ${r.merchantNormalized} (${r.merchantType})'),
           Text('Date: ${r.date}'),
+          TextButton(
+            key: const Key('toggleOcr'),
+            onPressed: () => setState(() => _showOcr = !_showOcr),
+            child: Text(_showOcr ? 'Nascondi testo OCR' : 'Mostra testo OCR'),
+          ),
+          if (_showOcr)
+            SelectableText(r.ocrText, key: const Key('ocrText')),
           const SizedBox(height: 16),
           Row(
             children: [

@@ -19,3 +19,21 @@ Biglietto Cinema Intero,UCI,en:cinema,leisure_travel
 Bolletta Luce 120kWh,Enel,en:utilities,services
 Raccomandata 20G,Poste,en:postal,services
 Quaderno A4 96p,Feltrinelli,en:stationery,other
+Moment 200MG 12CPR,Angelini,en:medicine,health
+Tachipirina 500MG 20CPR,Angelini,en:medicine,health
+Cerotti Assortiti 20PZ,Pic,en:dressing,health
+Sciroppo Tosse 200ML,Boiron,en:syrup,health
+Ticket Sanitario,ASL,en:ticket,health
+Pane Fresco KG,Forno,en:bakery,groceries
+Acqua Minerale 6X2L,SantAnna,en:water,groceries
+Coperto,Tavolo,en:cover,restaurants
+Conto Tavolo 4,Osteria,en:bill,restaurants
+Gasolio Self 30L,Eni,en:fuel,transport
+Pedaggio A1,Autostrade,en:toll,transport
+Felpa Invernale L,OVS,en:clothing,shopping
+Pentola Acciaio 24CM,IKEA,en:cookware,shopping
+Garanzia Estesa 24M,MediaWorld,en:warranty,technology
+Biglietto Museo,Uffizi,en:museum,leisure_travel
+Check-in Hotel 1 Notte,NH,en:hotels,leisure_travel
+Canone Mensile Fibra,Tim,en:telecom,services
+Bollettino Postale,Poste,en:postal,services
