@@ -104,9 +104,11 @@ class TransactionExtractor {
       if (amounts.isNotEmpty) {
         total = amounts.last;
       } else {
-        // Narrow window: a wide one grabs footer amounts past the total
-        // (e.g. bare "Totale:" followed by legalese then figures).
-        final next = _firstAmountInNextLines(lines, i + 1, 2);
+        // Window of exactly 1: the classic "TOTALE\n13,60" layout only.
+        // Wider windows grab footer figures past the total (Amazon case:
+        // bare "Totale:", legalese, then subtotal before the grand total).
+        // Anything else falls through to the last-amount fallback below.
+        final next = _firstAmountInNextLines(lines, i + 1, 1);
         if (next != null) total = next;
       }
     }
