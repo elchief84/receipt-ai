@@ -59,7 +59,9 @@ class ReceiptPipeline {
 
   TransactionResult run(String ocrText) {
     final draft = extractor.extract(ocrText);
-    final merchant = normalizer.normalize(draft.merchantRaw);
+    final lines = ocrText.split('\n').map((l) => l.trim()).toList();
+    final merchant =
+        normalizer.findInLines(lines) ?? normalizer.normalize(draft.merchantRaw);
     final items = _itemLines(ocrText);
     final classification = classifier.classify(
       ClassificationInput(

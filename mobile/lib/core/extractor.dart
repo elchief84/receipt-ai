@@ -18,6 +18,24 @@ class TransactionDraft {
 
 class TransactionExtractor {
   static final _date = RegExp(r'(\d{2})[/\-.](\d{2})[/\-.](\d{4})');
+  static const _months = {
+    'gennaio': '01',
+    'febbraio': '02',
+    'marzo': '03',
+    'aprile': '04',
+    'maggio': '05',
+    'giugno': '06',
+    'luglio': '07',
+    'agosto': '08',
+    'settembre': '09',
+    'ottobre': '10',
+    'novembre': '11',
+    'dicembre': '12',
+  };
+  static final _dateWords = RegExp(
+    r'(\d{1,2})\s+(gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre)\s+(\d{4})',
+    caseSensitive: false,
+  );
   static final _totalKeyword = RegExp(
     r'\b(TOTALE|TOTAL|IMPORTO)\b',
     caseSensitive: false,
@@ -49,6 +67,13 @@ class TransactionExtractor {
     if (dateMatch != null) {
       date =
           '${dateMatch.group(1)}/${dateMatch.group(2)}/${dateMatch.group(3)}';
+    } else {
+      final wordsMatch = _dateWords.firstMatch(ocrText);
+      if (wordsMatch != null) {
+        final day = wordsMatch.group(1)!.padLeft(2, '0');
+        final month = _months[wordsMatch.group(2)!.toLowerCase()]!;
+        date = '$day/$month/${wordsMatch.group(3)}';
+      }
     }
 
     return TransactionDraft(
@@ -79,7 +104,9 @@ class TransactionExtractor {
       if (amounts.isNotEmpty) {
         total = amounts.last;
       } else {
-        final next = _firstAmountInNextLines(lines, i + 1, 4);
+        // Narrow window: a wide one grabs footer amounts past the total
+        // (e.g. bare "Totale:" followed by legalese then figures).
+        final next = _firstAmountInNextLines(lines, i + 1, 2);
         if (next != null) total = next;
       }
     }

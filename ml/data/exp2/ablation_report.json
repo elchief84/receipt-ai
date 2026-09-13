@@ -1,6 +1,6 @@
 {
-  "n_train": 8209,
-  "n_test": 1791,
+  "n_train": 8214,
+  "n_test": 1786,
   "train_merchants": [
     "amazon",
     "bar centrale",
@@ -28,8 +28,8 @@
     "unieuro"
   ],
   "merchant_only": {
-    "accuracy": 0.24623115577889448,
-    "f1_macro": 0.09879032258064516
+    "accuracy": 0.23684210526315788,
+    "f1_macro": 0.09574468085106383
   },
   "full": {
     "accuracy": 1.0,

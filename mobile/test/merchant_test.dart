@@ -28,4 +28,19 @@ void main() {
   test('food_shop maps to groceries category', () {
     expect(defaultCategoryForMerchantType('food_shop'), 'groceries');
   });
+
+  test('findInLines catches buried Amazon merchant', () {
+    final hit = normalizer.findInLines([
+      'Riepilogo dell\'ordine',
+      'Vincenzo Romano',
+      'Venduto da: Amazon.it',
+    ]);
+    expect(hit, isNotNull);
+    expect(hit!.normalizedName, 'amazon');
+    expect(hit.merchantType, 'ecommerce');
+  });
+
+  test('findInLines returns null when nothing matches', () {
+    expect(normalizer.findInLines(['Ciao', 'Mondo']), isNull);
+  });
 }
