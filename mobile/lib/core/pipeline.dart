@@ -5,6 +5,7 @@ library;
 import 'classify.dart';
 import 'extractor.dart';
 import 'merchant.dart';
+import 'normalize.dart';
 
 class TransactionResult {
   TransactionResult({
@@ -19,6 +20,7 @@ class TransactionResult {
     required this.modelVersion,
     required this.ocrText,
     required this.items,
+    this.itemDetails = const [],
   });
   final String merchantRaw;
   final String merchantNormalized;
@@ -32,6 +34,9 @@ class TransactionResult {
   final String ocrText;
   final List<String> items;
 
+  /// Item-level labels (ADR-0007). Empty when nothing informative.
+  final List<ItemClassification> itemDetails;
+
   TransactionResult copyWith({String? category}) => TransactionResult(
     merchantRaw: merchantRaw,
     merchantNormalized: merchantNormalized,
@@ -44,6 +49,7 @@ class TransactionResult {
     modelVersion: modelVersion,
     ocrText: ocrText,
     items: items,
+    itemDetails: itemDetails,
   );
 }
 
@@ -72,7 +78,9 @@ class ReceiptPipeline {
       ),
     );
     return TransactionResult(
-      merchantRaw: draft.merchantRaw,
+      merchantRaw: merchant.normalizedName.isEmpty
+          ? draft.merchantRaw
+          : merchant.rawName,
       merchantNormalized: merchant.normalizedName,
       merchantType: merchant.merchantType,
       date: draft.date,
@@ -83,7 +91,48 @@ class ReceiptPipeline {
       modelVersion: classification.modelVersion,
       ocrText: ocrText,
       items: items,
+      itemDetails: _classifyItems(
+        classifier,
+        merchant.normalizedName,
+        merchant.merchantType,
+        items,
+      ),
     );
+  }
+
+  /// One model call per line, same artifact. A line earns a label only
+  /// with >= 2 informative tokens and at least medium confidence —
+  /// junk lines ("41", "E", "Stampa") stay unlabeled.
+  static List<ItemClassification> _classifyItems(
+    Classifier classifier,
+    String merchantNormalized,
+    String merchantType,
+    List<String> items,
+  ) {
+    final details = <ItemClassification>[];
+    for (final line in items) {
+      // No informative tokens (digits/stopwords only): never a label.
+      // The merchant name stays OUT of the item signal on purpose:
+      // the line must earn its label alone (ADR-0001 at item level).
+      if (tokenize(line).isEmpty) continue;
+      final res = classifier.classify(
+        ClassificationInput(
+          merchantNormalized: '',
+          merchantType: merchantType,
+          ocrText: line,
+          items: [line],
+        ),
+      );
+      if (res.level == ConfidenceLevel.low) continue;
+      details.add(
+        ItemClassification(
+          description: line,
+          category: res.category,
+          confidence: res.confidence,
+        ),
+      );
+    }
+    return details;
   }
 
   static List<String> _itemLines(String ocrText) {

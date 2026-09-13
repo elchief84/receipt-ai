@@ -50,8 +50,7 @@ void main() {
     expect(find.byKey(const Key('confidence')), findsOneWidget);
   });
 
-  testWidgets('correct and change-category record feedback', (tester) async {
-    final feedback = InMemoryFeedbackLog();
+  testWidgets('correct and change-category record feedback', (tester) async {    final feedback = InMemoryFeedbackLog();
     await tester.pumpWidget(
       MaterialApp(
         home: HomeScreen(
@@ -77,4 +76,25 @@ void main() {
     expect(feedback.entries, hasLength(2));
     expect(feedback.entries.last.correctedCategory, 'shopping');
   });
+
+  testWidgets('amazon generic sample shows shopping item details', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HomeScreen(
+          pipeline: testPipeline(),
+          ocr: FakeOcrEngine(''),
+          feedback: InMemoryFeedbackLog(),
+          history: HistoryLog(),
+        ),
+      ),
+    );
+    await tester.tap(find.byKey(const Key('sample-Amazon Generic')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('itemDetail-0')), findsOneWidget);
+    expect(find.textContaining('shopping'), findsWidgets);
+  });
 }
+

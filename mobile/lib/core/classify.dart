@@ -47,6 +47,19 @@ class ClassificationResult {
   ConfidenceLevel get level => levelFor(confidence);
 }
 
+/// Per-item label (ADR-0007): secondary signal, shown only when the line
+/// carries enough text and the model is at least medium-confident.
+class ItemClassification {
+  ItemClassification({
+    required this.description,
+    required this.category,
+    required this.confidence,
+  });
+  final String description;
+  final String category;
+  final double confidence;
+}
+
 abstract class Classifier {
   ClassificationResult classify(ClassificationInput input);
 }

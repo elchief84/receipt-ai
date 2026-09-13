@@ -103,6 +103,24 @@ class _ResultScreenState extends State<ResultScreen> {
           const SizedBox(height: 8),
           Text('Merchant: ${r.merchantNormalized} (${r.merchantType})'),
           Text('Date: ${r.date}'),
+          if (r.itemDetails.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const Text('Dettaglio items'),
+            ...r.itemDetails.asMap().entries.map(
+              (e) => ListTile(
+                key: Key('itemDetail-${e.key}'),
+                dense: true,
+                title: Text(
+                  e.value.description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: Text(
+                  '${e.value.category} ${(e.value.confidence * 100).toStringAsFixed(0)}%',
+                ),
+              ),
+            ),
+          ],
           TextButton(
             key: const Key('toggleOcr'),
             onPressed: () => setState(() => _showOcr = !_showOcr),
