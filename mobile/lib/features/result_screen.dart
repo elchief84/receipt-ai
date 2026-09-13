@@ -1,0 +1,120 @@
+import 'package:flutter/material.dart';
+
+import '../core/classify.dart';
+import '../core/feedback.dart';
+import '../core/normalize.dart';
+import '../core/pipeline.dart';
+
+class ResultScreen extends StatefulWidget {
+  const ResultScreen({
+    super.key,
+    required this.result,
+    required this.feedback,
+    required this.pipeline,
+  });
+
+  final TransactionResult result;
+  final FeedbackLog feedback;
+  final ReceiptPipeline pipeline;
+
+  @override
+  State<ResultScreen> createState() => _ResultScreenState();
+}
+
+class _ResultScreenState extends State<ResultScreen> {
+  late String _category;
+
+  @override
+  void initState() {
+    super.initState();
+    _category = widget.result.category;
+  }
+
+  void _confirm(bool corrected) {
+    widget.feedback.record(
+      FeedbackEntry(
+        originalCategory: widget.result.category,
+        correctedCategory: _category,
+        merchantNormalized: widget.result.merchantNormalized,
+        total: widget.result.total,
+        modelVersion: widget.result.modelVersion,
+        timestamp: DateTime.now(),
+      ),
+    );
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          corrected
+              ? 'Correzione registrata: $_category'
+              : 'Confermato: $_category',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _changeCategory() async {
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Change category'),
+        children: expenseCategories
+            .map(
+              (c) => SimpleDialogOption(
+                key: Key('category-$c'),
+                onPressed: () => Navigator.of(context).pop(c),
+                child: Text(c),
+              ),
+            )
+            .toList(),
+      ),
+    );
+    if (selected != null) {
+      setState(() => _category = selected);
+      _confirm(true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final r = widget.result;
+    final pct = (r.confidence * 100).toStringAsFixed(0);
+    return Scaffold(
+      appBar: AppBar(title: Text(r.merchantRaw)),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text(
+            '€${r.total.toStringAsFixed(2)}',
+            key: const Key('total'),
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(_category, key: const Key('category')),
+          Text(
+            'Confidence $pct% (${levelFor(r.confidence).name})',
+            key: const Key('confidence'),
+          ),
+          const SizedBox(height: 8),
+          Text('Merchant: ${r.merchantNormalized} (${r.merchantType})'),
+          Text('Date: ${r.date}'),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              ElevatedButton(
+                key: const Key('correct'),
+                onPressed: () => _confirm(false),
+                child: const Text('Correct'),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton(
+                key: const Key('changeCategory'),
+                onPressed: _changeCategory,
+                child: const Text('Change category'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
