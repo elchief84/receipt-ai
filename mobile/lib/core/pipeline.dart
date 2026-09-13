@@ -31,6 +31,20 @@ class TransactionResult {
   final String modelVersion;
   final String ocrText;
   final List<String> items;
+
+  TransactionResult copyWith({String? category}) => TransactionResult(
+    merchantRaw: merchantRaw,
+    merchantNormalized: merchantNormalized,
+    merchantType: merchantType,
+    date: date,
+    total: total,
+    currency: currency,
+    category: category ?? this.category,
+    confidence: confidence,
+    modelVersion: modelVersion,
+    ocrText: ocrText,
+    items: items,
+  );
 }
 
 class ReceiptPipeline {

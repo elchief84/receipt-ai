@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../core/feedback.dart';
+import '../core/history.dart';
 import '../core/ocr.dart';
 import '../core/pipeline.dart';
 import 'result_screen.dart';
 import 'samples.dart';
+import 'summary_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({
@@ -13,11 +15,13 @@ class HomeScreen extends StatelessWidget {
     required this.pipeline,
     required this.ocr,
     required this.feedback,
+    required this.history,
   });
 
   final ReceiptPipeline pipeline;
   final OcrEngine ocr;
   final FeedbackLog feedback;
+  final HistoryLog history;
 
   Future<void> _fromImage(BuildContext context, ImageSource source) async {
     final picker = ImagePicker();
@@ -40,6 +44,7 @@ class HomeScreen extends StatelessWidget {
           result: pipeline.run(result.text),
           feedback: feedback,
           pipeline: pipeline,
+          history: history,
         ),
       ),
     );
@@ -52,6 +57,7 @@ class HomeScreen extends StatelessWidget {
           result: pipeline.run(text),
           feedback: feedback,
           pipeline: pipeline,
+          history: history,
         ),
       ),
     );
@@ -76,6 +82,17 @@ class HomeScreen extends StatelessWidget {
             onPressed: () => _fromImage(context, ImageSource.gallery),
             icon: const Icon(Icons.image),
             label: const Text('Choose image'),
+          ),
+          const SizedBox(height: 8),
+          ElevatedButton.icon(
+            key: const Key('summary'),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => SummaryScreen(history: history),
+              ),
+            ),
+            icon: const Icon(Icons.pie_chart),
+            label: const Text('Summary'),
           ),
           const SizedBox(height: 24),
           const Text('Use sample receipt'),

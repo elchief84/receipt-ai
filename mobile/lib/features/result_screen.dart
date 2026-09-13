@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/classify.dart';
 import '../core/feedback.dart';
+import '../core/history.dart';
 import '../core/normalize.dart';
 import '../core/pipeline.dart';
 
@@ -11,11 +12,13 @@ class ResultScreen extends StatefulWidget {
     required this.result,
     required this.feedback,
     required this.pipeline,
+    required this.history,
   });
 
   final TransactionResult result;
   final FeedbackLog feedback;
   final ReceiptPipeline pipeline;
+  final HistoryLog history;
 
   @override
   State<ResultScreen> createState() => _ResultScreenState();
@@ -41,6 +44,7 @@ class _ResultScreenState extends State<ResultScreen> {
         timestamp: DateTime.now(),
       ),
     );
+    widget.history.add(widget.result.copyWith(category: _category));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(

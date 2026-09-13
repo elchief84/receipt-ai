@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:receipt_ai/core/classify.dart';
 import 'package:receipt_ai/core/extractor.dart';
 import 'package:receipt_ai/core/feedback.dart';
+import 'package:receipt_ai/core/history.dart';
 import 'package:receipt_ai/core/merchant.dart';
 import 'package:receipt_ai/core/ocr.dart';
 import 'package:receipt_ai/core/pipeline.dart';
@@ -31,6 +32,7 @@ void main() {
           pipeline: testPipeline(),
           ocr: FakeOcrEngine(''),
           feedback: feedback,
+          history: HistoryLog(),
         ),
       ),
     );
@@ -56,6 +58,7 @@ void main() {
           pipeline: testPipeline(),
           ocr: FakeOcrEngine(''),
           feedback: feedback,
+          history: HistoryLog(),
         ),
       ),
     );

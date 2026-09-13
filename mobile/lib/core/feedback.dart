@@ -1,6 +1,8 @@
 /// Feedback: user corrections stored for future retraining, never online.
-/// T3 keeps it in memory; T4 adds file persistence behind the same seam.
 library;
+
+import 'dart:convert';
+import 'dart:io';
 
 class FeedbackEntry {
   FeedbackEntry({
@@ -17,6 +19,24 @@ class FeedbackEntry {
   final double total;
   final String modelVersion;
   final DateTime timestamp;
+
+  Map<String, dynamic> toJson() => {
+    'original_category': originalCategory,
+    'corrected_category': correctedCategory,
+    'merchant_normalized': merchantNormalized,
+    'total': total,
+    'model_version': modelVersion,
+    'timestamp': timestamp.toIso8601String(),
+  };
+
+  factory FeedbackEntry.fromJson(Map<String, dynamic> json) => FeedbackEntry(
+    originalCategory: json['original_category'] as String,
+    correctedCategory: json['corrected_category'] as String,
+    merchantNormalized: json['merchant_normalized'] as String,
+    total: (json['total'] as num).toDouble(),
+    modelVersion: json['model_version'] as String,
+    timestamp: DateTime.parse(json['timestamp'] as String),
+  );
 }
 
 abstract class FeedbackLog {
@@ -29,6 +49,34 @@ class InMemoryFeedbackLog implements FeedbackLog {
 
   @override
   void record(FeedbackEntry entry) => _entries.add(entry);
+
+  @override
+  List<FeedbackEntry> get entries => List.unmodifiable(_entries);
+}
+
+/// File-backed log: one JSON object per line, local only, never uploaded.
+class FileFeedbackLog implements FeedbackLog {
+  FileFeedbackLog(this.file) {
+    if (file.existsSync()) {
+      for (final line in file.readAsLinesSync()) {
+        final trimmed = line.trim();
+        if (trimmed.isEmpty) continue;
+        _entries.add(
+          FeedbackEntry.fromJson(json.decode(trimmed) as Map<String, dynamic>),
+        );
+      }
+    }
+  }
+
+  final File file;
+  final List<FeedbackEntry> _entries = [];
+
+  @override
+  void record(FeedbackEntry entry) {
+    _entries.add(entry);
+    file.writeAsStringSync('${json.encode(entry.toJson())}\n',
+        mode: FileMode.append);
+  }
 
   @override
   List<FeedbackEntry> get entries => List.unmodifiable(_entries);

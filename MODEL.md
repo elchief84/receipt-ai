@@ -35,6 +35,19 @@ F1-macro resta bassa: 4 soli merchant nel test, categorie povere
 (`technology`, `leisure_travel`) quasi assenti — atteso con seed da 20 prodotti,
 da documentare non da gonfiare con sintetico casuale.
 
+## Holdout unknown-merchant (ADR-0003, niente golden manuale)
+
+Test merchants con nomi perturbati automaticamente (`Conad→Conadd`,
+typo OCR, slip vocalici: `ml/evaluation/perturb.py`), mai visti nel train:
+
+| features | accuracy | F1-macro |
+|----------|----------|----------|
+| merchant_only | 0.000 | 0.000 |
+| full | 0.490 | 0.200 |
+
+Il modello full non degrada coi typo perché generalizza via items/testo,
+non via nome merchant. Report: `ml/data/exp2/holdout_report.json`.
+
 ## Modello embedded
 
 `ml/data/exp2/classifier.json` (48KB: vocabulary 245 termini + idf + coef) con
