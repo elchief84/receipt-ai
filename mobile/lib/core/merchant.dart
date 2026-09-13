@@ -87,8 +87,11 @@ class MerchantNormalizer {
   }
 
   NormalizedMerchant? _containsMatch(String raw, String normalized) {
+    final tokens = normalized.split(' ').where((t) => t.length >= 3).toSet();
     for (final entry in _gazetteer.entries) {
-      if (normalized.contains(entry.key) || entry.key.contains(normalized)) {
+      final keyTokens =
+          entry.key.split(' ').where((t) => t.length >= 3).toSet();
+      if (tokens.intersection(keyTokens).isNotEmpty) {
         return NormalizedMerchant(
           rawName: raw,
           normalizedName: entry.key,
