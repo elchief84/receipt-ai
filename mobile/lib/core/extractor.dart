@@ -78,6 +78,7 @@ class TransactionExtractor {
     'euro',
     'telefono',
     'cliente',
+    'rt', // matricola line, never a product
   };
 
   static bool _isMeta(String line) {
@@ -230,6 +231,9 @@ class TransactionExtractor {
     final items = <String>[];
     for (var i = 0; i < lines.length; i++) {
       final line = lines[i];
+      // Asterisk-led fiscal notes ("* Inp. De traibile 13.60") are never
+      // products, even when they carry an amount.
+      if (line.trimLeft().startsWith('*')) continue;
       final match = _amount.firstMatch(line);
       if (match == null) continue;
       final remainder = line.replaceFirst(match.group(0)!, '').trim();
@@ -266,9 +270,10 @@ class TransactionExtractor {
     for (var i = from; i >= 0 && steps < 6; i--, steps++) {
       final line = lines[i];
       if (_amount.hasMatch(line) || _isBoundary(line)) return null;
-      // Fragments ("ale:", "E") and meta are not descriptions.
-      final letters = line.replaceAll(RegExp(r'[^a-zA-Z]'), '');
-      if (letters.length < 4 || _isMeta(line)) continue;
+      // A description needs at least two real words: labels ("Prezzo"),
+      // codes ("RT 45...") and fragments ("ale:") never qualify.
+      final words = _letterTokens(line).where((t) => t.length >= 2).toList();
+      if (words.length < 2 || _isMeta(line)) continue;
       return line;
     }
     return null;
