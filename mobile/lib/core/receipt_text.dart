@@ -79,6 +79,9 @@ const metaWords = {
   'telefono',
   'cliente',
   'prezzo', // price labels ("Prezzo( €)"), never products
+  'via', 'viale', 'piazza', // street tokens: addresses, never products
+  'snc', 'srl', 'spa', 'sas', // legal forms, never products
+  'fax',
   'rt', // matricola line, never a product
   'documento',
   'commerciale',

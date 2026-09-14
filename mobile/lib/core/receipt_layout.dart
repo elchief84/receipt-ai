@@ -10,6 +10,8 @@ library;
 
 import 'dart:ui' show Rect;
 
+import 'package:flutter/foundation.dart';
+
 import 'receipt_text.dart' as t;
 
 /// One visual row: OCR lines sharing a horizontal band, left to right.
@@ -100,14 +102,16 @@ class ReceiptLayoutParser {
       }
     }
 
-    final raw = _groupItems(rows, kinds, start, end);
+    final grouped = _groupItems(rows, kinds, start, end);
+    final raw = grouped.items;
     // NOTE: declared count is NOT a merge guard — OCR routinely drops
     // product lines, so raw rows != declared items even when parsed
-    // perfectly. Continuation merging stays unconditional.
-    _mergeShortDescs(raw);
-    _pairPositional(raw, lines, end);
+    // perfectly.
+    _pairPositional(
+        raw, rows, kinds, start, end, grouped.consumedBare, aligned);
+    _mergeContinuations(raw, rows);
     final items = [
-      for (final e in raw) SegmentedItem(e.desc, e.price),
+      for (final e in raw) SegmentedItem(_stripLeadingCode(e.desc), e.price),
     ];
     final repaired = _repair(items, rows, kinds, end, total);
     final declared = _declaredCount(lines);
@@ -206,19 +210,80 @@ class ReceiptLayoutParser {
         return boxOf[a]!.left.compareTo(boxOf[b]!.left);
       });
 
+    // Two-phase clustering on de-skewed bands.
+    // Phase A: TEXT rows cluster among themselves. Each row keeps its
+    // CORE band fixed at creation (first member) — the band NEVER grows,
+    // so chaining is impossible by construction (a growing union glued
+    // a 216px header into one row). Threshold 0.5: adjacent receipt
+    // lines genuinely overlap less than half their height.
+    // Phase B: AMOUNT lines never seed rows. Each attaches to the text
+    // row with maximum overlap (≥ 0.3 — short right-column boxes
+    // legitimately overlap partially), else becomes its own bare row.
+    // A price between two descriptions joins the one it really overlaps.
     final building = <_RowBuild>[];
+    final pendingAmounts = <int>[];
     for (final idx in ordered) {
-      final y = deskew(idx);
-      final h = boxOf[idx]!.height;
-      var placed = false;
-      for (final r in building) {
-        if ((y - r.y).abs() <= 0.7 * (h > r.h ? h : r.h)) {
-          r.indices.add(idx);
-          placed = true;
-          break;
+      final text = lines[idx];
+      // Bare amounts (no description of their own) attach in Phase B.
+      // Inline "DESC price" rows stay text rows: they seed the skeleton.
+      if (_isBareAmountLine(text)) {
+        pendingAmounts.add(idx);
+        continue;
+      }
+      final b = boxOf[idx]!;
+      final cx = (b.left + b.right) / 2;
+      final top = b.top - slope * cx;
+      final bottom = b.bottom - slope * cx;
+      var best = -1;
+      var bestOverlap = 0.5;
+      for (var r = 0; r < building.length; r++) {
+        final row = building[r];
+        final overlap =
+            (bottom < row.bottom ? bottom : row.bottom) -
+            (top > row.top ? top : row.top);
+        final ownH = bottom - top;
+        final rowH = row.bottom - row.top;
+        final minH = ownH < rowH ? ownH : rowH;
+        if (minH <= 0) continue;
+        final ratio = overlap / minH;
+        if (ratio > bestOverlap) {
+          bestOverlap = ratio;
+          best = r;
         }
       }
-      if (!placed) building.add(_RowBuild(y, h, idx));
+      if (best >= 0) {
+        building[best].indices.add(idx);
+      } else {
+        building.add(_RowBuild(top, bottom, idx));
+      }
+    }
+    for (final idx in pendingAmounts) {
+      final b = boxOf[idx]!;
+      final cx = (b.left + b.right) / 2;
+      final top = b.top - slope * cx;
+      final bottom = b.bottom - slope * cx;
+      var best = -1;
+      var bestOverlap = rowOverlap;
+      for (var r = 0; r < building.length; r++) {
+        final row = building[r];
+        final overlap =
+            (bottom < row.bottom ? bottom : row.bottom) -
+            (top > row.top ? top : row.top);
+        final ownH = bottom - top;
+        final rowH = row.bottom - row.top;
+        final minH = ownH < rowH ? ownH : rowH;
+        if (minH <= 0) continue;
+        final ratio = overlap / minH;
+        if (ratio > bestOverlap) {
+          bestOverlap = ratio;
+          best = r;
+        }
+      }
+      if (best >= 0) {
+        building[best].indices.add(idx);
+      } else {
+        building.add(_RowBuild(top, bottom, idx));
+      }
     }
     // Null-box lines (rare on ML Kit): appended in emission order.
     for (var i = 0; i < lines.length; i++) {
@@ -237,11 +302,38 @@ class ReceiptLayoutParser {
 
   // ---- Phase 2: row typing --------------------------------------------
 
+  /// A line is a bare amount when it carries a price but no description
+  /// of its own ("3,99" yes; "LATTE 1.49" no). Mirrors _typeRow's
+  /// priced/bare split exactly.
+  static bool _isBareAmountLine(String text) {
+    if (!t.amountPattern.hasMatch(text)) return false;
+    final remainder = text.replaceAll(t.amountPattern, '').trim();
+    final words =
+        t.letterTokens(remainder).where((w) => w.length >= 2).toList();
+    return !(words.isNotEmpty &&
+        words.any((w) => !t.priceStopTokens.contains(w)));
+  }
+
   static final _sconto = RegExp(r'\bSCONT', caseSensitive: false);
   static final _declaredCountPattern =
       RegExp(r'NUMERO\D*ARTICOLI\D*(\d+)', caseSensitive: false);
   static final _rtMatricola =
       RegExp(r'\bRT\b\D{0,10}\d{6,}', caseSensitive: false);
+
+  /// Test seam: typed visual rows for a given input (what the parser
+  /// actually sees, geometry included).
+  @visibleForTesting
+  static List<(String text, RowKind kind)> debugRows(
+    List<String> lines,
+    List<Rect?>? boxes,
+  ) {
+    final aligned = boxes != null && boxes.length == lines.length;
+    final rows = _buildRows(lines, aligned ? boxes : null);
+    final kinds = rows.map(_typeRow).toList();
+    return [
+      for (var i = 0; i < rows.length; i++) (rows[i].text, kinds[i]),
+    ];
+  }
 
   static bool _isTrailerLike(String text) {
     final key = t.keywordForm(text);
@@ -314,9 +406,17 @@ class ReceiptLayoutParser {
     return null;
   }
 
+  /// Article codes ("3207757 disney...") are inventory references, not
+  /// part of the product name: strip a leading pure-digit run.
+  /// "21x20x26cm ..." and "1ab31 ..." survive (no whitespace right
+  /// after the digits).
+  static final _leadingCode = RegExp(r'^\d{1,8}\s+');
+  static String _stripLeadingCode(String desc) =>
+      desc.replaceFirst(_leadingCode, '');
+
   // ---- Phase 3+4: body grouping ---------------------------------------
 
-  static List<_RawItem> _groupItems(
+  static ({List<_RawItem> items, Set<int> consumedBare}) _groupItems(
     List<LayoutRow> rows,
     List<RowKind> kinds,
     int start,
@@ -324,8 +424,10 @@ class ReceiptLayoutParser {
   ) {
     final items = <_RawItem>[];
     final pending = <int>[];
+    final consumedBare = <int>{};
 
-    void flushPending(double price) {
+    void flushPending(double price, int rowIdx) {
+      consumedBare.add(rowIdx);
       if (pending.isEmpty) return;
       // A pending run made only of single-word fragments ("ale:",
       // "Prezzo") is label debris, not a product: drop it instead of
@@ -365,7 +467,7 @@ class ReceiptLayoutParser {
         case RowKind.bare:
           // Bare price closes every pending description above
           // (two-column rows, "TOTALE\n13,60" splits).
-          flushPending(amountOf(row)!);
+          flushPending(amountOf(row)!, i);
         case RowKind.desc:
         case RowKind.fragment:
           pending.add(i);
@@ -414,27 +516,66 @@ class ReceiptLayoutParser {
       }
       pending.clear();
     }
-    _attachFragments(items);
-    return items;
+    _attachFragments(items, rows);
+    return (items: items, consumedBare: consumedBare);
   }
 
-  /// Short-merge: a continuation line joins the previous priceless
-  /// description. Continuation = short fragment ("plast ica") or a
-  /// measurement ("30x45cm", "500 ml") — never a standalone product.
-  /// Only priceless-to-priceless: priced rows keep their shape, so
-  /// genuine short products after priced rows survive.
-  static void _mergeShortDescs(List<_RawItem> items) {
-    for (var k = 1; k < items.length; k++) {
-      final cur = items[k];
-      if (cur.price != null) continue;
-      if (!_isContinuation(cur.desc)) continue;
-      final prev = items[k - 1];
-      if (prev.price != null) continue;
-      prev.desc = '${prev.desc} ${cur.desc}';
-      items.removeAt(k);
-      k--;
+  /// Post-zip continuation merge: a continuation row joins the nearest
+  /// item (above preferred, band gap ≤ ~1 line). Sum-safe by
+  /// construction: a merge fires only when at most one side carries a
+  /// price, and the survivor keeps it — the total can never move.
+  /// Continuation = short fragment ("plast ica"), a measurement
+  /// ("30x45cm") or a dimensions line ("21x20x26cm div, co"): none of
+  /// these is ever a standalone product. Full descriptions (aquarel,
+  /// Scherino) stay separate — genuinely ambiguous, user verifies.
+  static void _mergeContinuations(
+    List<_RawItem> items,
+    List<LayoutRow> rows,
+  ) {
+    var changed = true;
+    while (changed) {
+      changed = false;
+      for (var k = 0; k < items.length; k++) {
+        final cur = items[k];
+        if (!_isContinuation(cur.desc) && !_hasDimsToken(cur.desc)) {
+          continue;
+        }
+        var best = -1;
+        var bestGap = double.infinity;
+        for (var j = 0; j < items.length; j++) {
+          if (j == k) continue;
+          final other = items[j];
+          if (cur.price != null && other.price != null) continue;
+          final gap = _rowGapY(rows, other.row, cur.row);
+          if (gap > 1.0) continue;
+          final above = other.row <= cur.row;
+          if (best < 0 ||
+              gap < bestGap - 1e-9 ||
+              ((gap - bestGap).abs() < 1e-9 &&
+                  above &&
+                  items[best].row > cur.row)) {
+            best = j;
+            bestGap = gap;
+          }
+        }
+        if (best < 0) continue;
+        final target = items[best];
+        if (target.row <= cur.row) {
+          target.desc = '${target.desc} ${cur.desc}';
+        } else {
+          target.desc = '${cur.desc} ${target.desc}';
+        }
+        target.price ??= cur.price;
+        items.removeAt(k);
+        changed = true;
+        break;
+      }
     }
   }
+
+  static final _dimsToken =
+      RegExp(r'\d+\s*[x×]\s*\d+', caseSensitive: false);
+  static bool _hasDimsToken(String desc) => _dimsToken.hasMatch(desc);
 
   static final _measurePattern = RegExp(
     r'^[\dx×,.\s/\-]*\s*(cm|mm|kg|g|ml|l|cl|pz|gr|m|lt)\.?$',
@@ -447,30 +588,64 @@ class ReceiptLayoutParser {
     return _measurePattern.hasMatch(text);
   }
 
-  /// Positional zip for two-column layouts: bare amounts after the
-  /// currency marker ("EUR") pair in order with priceless descriptions.
-  /// Guards: no marker → nothing; the IVA-summary trio precedes the
-  /// marker and stays out; stops at payment keywords; leftovers on
-  /// either side keep their shape.
+  /// Positional zip for two-column layouts: bare amounts pair in order
+  /// with priceless descriptions.
+  ///
+  /// Two paths, chosen by evidence quality:
+  /// - WITH geometry: row-based. Only bare rows physically ABOVE the
+  ///   totals row qualify — product prices sit next to their products,
+  ///   never below TOTALE (this structurally excludes the IVA trio,
+  ///   repeated totals and card blocks). Rows already consumed by
+  ///   grouping are skipped: no double count. A SPECIFICA backstop
+  ///   covers receipts whose trailer wasn't detected.
+  /// - WITHOUT geometry (samples/tests): legacy EUR-marker scan over
+  ///   the emission-order lines. Weaker, but it's all the evidence
+  ///   there is.
   static void _pairPositional(
     List<_RawItem> items,
-    List<String> lines,
-    int bodyEnd,
+    List<LayoutRow> rows,
+    List<RowKind> kinds,
+    int start,
+    int end,
+    Set<int> consumedBare,
+    bool hasGeometry,
   ) {
-    var eur = -1;
-    for (var i = bodyEnd; i < lines.length; i++) {
-      if (_isEurMarker(lines[i])) eur = i;
-    }
-    if (eur < 0) return;
     final amounts = <double>[];
-    for (var i = eur + 1; i < lines.length; i++) {
-      final line = lines[i];
-      if (_isPaymentStop(line)) break;
-      final m = t.amountPattern.firstMatch(line);
-      if (m == null) continue;
-      final remainder = line.replaceFirst(m.group(0)!, '').trim();
-      if (t.letterTokens(remainder).any((w) => w.length >= 2)) continue;
-      amounts.add(t.parseItalianAmount(m.group(1)!));
+    if (hasGeometry) {
+      final boundY =
+          end < rows.length ? _centerY(rows[end]) : double.infinity;
+      var specificaIdx = rows.length;
+      for (var i = end; i < rows.length; i++) {
+        if (_hasToken(rows[i].text, 'specifica')) {
+          specificaIdx = i;
+          break;
+        }
+      }
+      for (var i = start; i < end; i++) {
+        if (kinds[i] != RowKind.bare) continue;
+        if (consumedBare.contains(i)) continue;
+        if (_centerY(rows[i]) >= boundY) continue;
+        if (i >= specificaIdx) continue;
+        final m = t.amountPattern.firstMatch(rows[i].text);
+        if (m == null) continue;
+        amounts.add(t.parseItalianAmount(m.group(1)!));
+      }
+    } else {
+      final lines = [for (final r in rows) r.text];
+      var eur = -1;
+      for (var i = end; i < lines.length; i++) {
+        if (_isEurMarker(lines[i])) eur = i;
+      }
+      if (eur < 0) return;
+      for (var i = eur + 1; i < lines.length; i++) {
+        final line = lines[i];
+        if (_isPaymentStop(line)) break;
+        final m = t.amountPattern.firstMatch(line);
+        if (m == null) continue;
+        final remainder = line.replaceFirst(m.group(0)!, '').trim();
+        if (t.letterTokens(remainder).any((w) => w.length >= 2)) continue;
+        amounts.add(t.parseItalianAmount(m.group(1)!));
+      }
     }
     var k = 0;
     for (final item in items) {
@@ -479,6 +654,14 @@ class ReceiptLayoutParser {
       item.price = amounts[k];
       k++;
     }
+  }
+
+  static double _centerY(LayoutRow row) {
+    final b = row.box;
+    if (b == null) {
+      return row.indices.isEmpty ? 0 : row.indices.first.toDouble();
+    }
+    return (b.top + b.bottom) / 2;
   }
 
   static bool _isEurMarker(String line) {
@@ -506,8 +689,25 @@ class ReceiptLayoutParser {
     return t.letterTokens(line).any(_paymentStopWords.contains);
   }
 
-  /// Attaches one fragment row to the nearest priced item (gap ≤ 2 rows,
-  /// above preferred). Returns true when attached.
+  /// Vertical band gap between two layout rows, in line heights
+  /// (0 when the bands touch or overlap). Falls back to index distance
+  /// when boxes are missing (samples/tests): one row step ≈ half line.
+  static double _rowGapY(List<LayoutRow> rows, int a, int b) {
+    final ba = rows[a].box;
+    final bb = rows[b].box;
+    if (ba == null || bb == null) return (a - b).abs() * 0.5;
+    final top = ba.top > bb.top ? ba.top : bb.top;
+    final bottom = ba.bottom < bb.bottom ? ba.bottom : bb.bottom;
+    final overlap = bottom - top;
+    if (overlap >= 0) return 0;
+    final ha = ba.height <= 0 ? 40.0 : ba.height;
+    final hb = bb.height <= 0 ? 40.0 : bb.height;
+    final maxH = ha > hb ? ha : hb;
+    return -overlap / maxH; // gap in line heights
+  }
+
+  /// Attaches one fragment row to the nearest priced item (band gap ≤
+  /// ~1 line, above preferred). Returns true when attached.
   static bool _attachOne(
     List<_RawItem> items,
     List<LayoutRow> rows,
@@ -518,12 +718,12 @@ class ReceiptLayoutParser {
     var best = -1;
     for (var j = 0; j < items.length; j++) {
       if (items[j].price == null) continue;
-      final gap = (items[j].row - rowIdx).abs();
-      if (gap > 2) continue;
+      final gap = _rowGapY(rows, items[j].row, rowIdx);
+      if (gap > 1.0) continue;
       if (best < 0 ||
           (items[j].row <= rowIdx &&
               (items[best].row > rowIdx ||
-                  (items[best].row - rowIdx).abs() > gap))) {
+                  _rowGapY(rows, items[best].row, rowIdx) > gap))) {
         best = j;
       }
     }
@@ -536,10 +736,10 @@ class ReceiptLayoutParser {
     return true;
   }
 
-  /// Fragment attach: a short fragment row next to a priced item (row
-  /// gap ≤ 2, above preferred) is its continuation ("plast ica"), not a
-  /// product. Full descs never merge this way — only short fragments.
-  static void _attachFragments(List<_RawItem> items) {
+  /// Fragment attach: a short fragment row next to a priced item (band
+  /// gap ≤ ~1 line, above preferred) is its continuation ("plast ica"),
+  /// not a product. Full descs never merge this way — only fragments.
+  static void _attachFragments(List<_RawItem> items, List<LayoutRow> rows) {
     bool isFragment(_RawItem e) =>
         e.price == null && e.desc.trim().length < 15;
     for (var k = 0; k < items.length; k++) {
@@ -547,7 +747,7 @@ class ReceiptLayoutParser {
       var best = -1;
       for (var j = k - 1; j >= 0 && k - j <= 3; j--) {
         if (items[j].price == null) continue;
-        if ((items[k].row - items[j].row).abs() > 2) continue;
+        if (_rowGapY(rows, items[k].row, items[j].row) > 1.0) continue;
         best = j;
         break;
       }
@@ -556,7 +756,7 @@ class ReceiptLayoutParser {
             j < items.length && j - k <= 3;
             j++) {
           if (items[j].price == null) continue;
-          if ((items[j].row - items[k].row).abs() > 2) continue;
+          if (_rowGapY(rows, items[j].row, items[k].row) > 1.0) continue;
           best = j;
           break;
         }
@@ -616,8 +816,8 @@ class _RawItem {
 }
 
 class _RowBuild {
-  _RowBuild(this.y, this.h, int firstIdx) : indices = [firstIdx];
-  final double y;
-  final double h;
+  _RowBuild(this.top, this.bottom, int firstIdx) : indices = [firstIdx];
+  double top;
+  double bottom;
   final List<int> indices;
 }
