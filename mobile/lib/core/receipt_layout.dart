@@ -110,6 +110,7 @@ class ReceiptLayoutParser {
     _pairPositional(
         raw, rows, kinds, start, end, grouped.consumedBare, aligned);
     _mergeContinuations(raw, rows);
+    _attachOrphans(raw, rows, total, _declaredCount(lines));
     final items = [
       for (final e in raw) SegmentedItem(_stripLeadingCode(e.desc), e.price),
     ];
@@ -576,6 +577,51 @@ class ReceiptLayoutParser {
   static final _dimsToken =
       RegExp(r'\d+\s*[x×]\s*\d+', caseSensitive: false);
   static bool _hasDimsToken(String desc) => _dimsToken.hasMatch(desc);
+
+  /// Orphan attach: when the prices add up exactly AND every declared
+  /// product already has its price, leftover priceless descriptions
+  /// cannot be products (all prices accounted for) — they are
+  /// continuations of the item directly above (band gap ≤ ~1 line).
+  /// Fires ONLY in the exact-accounted case; otherwise leftovers stay
+  /// visible and honest. Verified on Action: aquarel→1ibro,
+  /// Scherino→1ab31, 15 items = 15 declared.
+  static void _attachOrphans(
+    List<_RawItem> items,
+    List<LayoutRow> rows,
+    double total,
+    int? declared,
+  ) {
+    if (declared == null || total <= 0) return;
+    final priced = items.where((e) => e.price != null).toList();
+    if (priced.length != declared) return;
+    final sum = priced.fold<double>(0, (a, e) => a + e.price!);
+    if ((sum - total).abs() > 0.01 * priced.length + 0.01) return;
+    for (var k = 0; k < items.length; k++) {
+      final cur = items[k];
+      if (cur.price != null) continue;
+      if (cur.desc.trim().isEmpty) continue;
+      // Nearest item PHYSICALLY above (row numbers, not list positions:
+      // inline-priced items enter during the loop, pending descs at the
+      // end, so list order ≠ row order). Continuations follow their
+      // product — never the other way round.
+      var best = -1;
+      var bestGap = double.infinity;
+      for (var j = 0; j < items.length; j++) {
+        if (j == k) continue;
+        if (items[j].row >= cur.row) continue;
+        final gap = _rowGapY(rows, items[j].row, cur.row);
+        if (gap > 1.0) continue;
+        if (gap < bestGap) {
+          best = j;
+          bestGap = gap;
+        }
+      }
+      if (best < 0) continue;
+      items[best].desc = '${items[best].desc} ${cur.desc}';
+      items.removeAt(k);
+      k--;
+    }
+  }
 
   static final _measurePattern = RegExp(
     r'^[\dx×,.\s/\-]*\s*(cm|mm|kg|g|ml|l|cl|pz|gr|m|lt)\.?$',

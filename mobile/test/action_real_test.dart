@@ -65,8 +65,32 @@ void main() {
     );
     expect(lavagnetta.description, contains('30x45cm'));
     expect(lavagnetta.price, 4.99);
-    // 15 prices for a 52,49 total that adds up exactly.
+    // Paper-verified: legno belongs to the train set, myo/mosaico/bambů
+    // are one product, Scherino belongs to 1ab31, aquarel to 1ibro.
+    final mini = layout.items.firstWhere(
+      (e) => e.description.contains('mini matters'),
+    );
+    expect(mini.description, contains('legno 23pz'));
+    expect(mini.price, 6.95);
+    final myo = layout.items.firstWhere(
+      (e) => e.description.contains('myo div.'),
+    );
+    expect(myo.description, contains('mosaico'));
+    expect(myo.description, contains('bamb'));
+    expect(myo.price, 3.99);
+    final unolibro = layout.items.firstWhere(
+      (e) => e.description.contains('1ibro da colorare'),
+    );
+    expect(unolibro.description, contains('aquarel'));
+    expect(unolibro.price, 2.99);
+    final lab = layout.items.firstWhere(
+      (e) => e.description.contains('1ab31'),
+    );
+    expect(lab.description, contains('Scherino'));
+    expect(lab.price, 2.99);
+    // 15 prices for a 52,49 total that adds up exactly, 15/15 declared.
     expect(priced.length, 15);
+    expect(layout.items.length, 15);
     expect(layout.sumOk, isTrue);
     // IVA-summary figures must never become item prices.
     for (final e in priced) {
