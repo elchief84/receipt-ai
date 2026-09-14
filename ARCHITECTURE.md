@@ -25,7 +25,7 @@ Ogni stage è un'interfaccia Dart sostituibile. Nessuna chiamata rete.
 
 - `features/capture`: Take photo / Choose image / Use sample receipt. OCR via ML Kit, mostra `text_raw` se confidence OCR bassa.
 - `core/ocr`: wrapper `OcrEngine` (impl MVP = ML Kit, interfaccia pronta per Tesseract-mobile).
-- `core/parsing`: `TransactionExtractor` — regex IT (`TOTALE`, `SUBTOTALE`, `IVA 22%`, date `dd/mm/yyyy`, importi `€1.234,56` → normalizzati).
+- `core/parsing`: `TransactionExtractor` — regex IT (`TOTALE`, `SUBTOTALE`, `IVA 22%`, date `dd/mm/yyyy`, importi `€1.234,56` → normalizzati); segmentazione item in `ReceiptLayoutParser` — righe visive da box ML Kit con de-skew, ordine canonico, tipizzazione righe, corpo, raggruppamento, sum-check (cfr. ADR-0009).
 - `core/merchant`: `MerchantNormalizer` + `assets/merchant_gazetteer.csv` (da OSM, cfr. DATASETS.md) + lista chiusa merchant_type:
   `supermarket, fuel, pharmacy, restaurant, clothes, home_store, electronics, hotel, transport_service, services, ecommerce, other`.
 - `core/classify`: `Classifier` → JSON logistico embedded (`assets/classifier.json`, cfr. ADR-0006) + fallback keyword scoring. Interfaccia stabile:
