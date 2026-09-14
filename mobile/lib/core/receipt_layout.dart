@@ -100,7 +100,12 @@ class ReceiptLayoutParser {
       }
     }
 
-    final items = _groupItems(rows, kinds, start, end);
+    final raw = _groupItems(rows, kinds, start, end);
+    _mergeShortDescs(raw);
+    _pairPositional(raw, lines, end);
+    final items = [
+      for (final e in raw) SegmentedItem(e.desc, e.price),
+    ];
     final declared = _declaredCount(lines);
     final repaired = _repair(items, rows, kinds, end, total);
     return ReceiptLayout(
@@ -267,7 +272,7 @@ class ReceiptLayoutParser {
 
   // ---- Phase 3+4: body grouping ---------------------------------------
 
-  static List<SegmentedItem> _groupItems(
+  static List<_RawItem> _groupItems(
     List<LayoutRow> rows,
     List<RowKind> kinds,
     int start,
@@ -366,9 +371,83 @@ class ReceiptLayoutParser {
       pending.clear();
     }
     _attachFragments(items);
-    return [
-      for (final e in items) SegmentedItem(e.desc, e.price),
-    ];
+    return items;
+  }
+
+  /// Short-merge: a short (< 15 chars) priceless description joins the
+  /// previous priceless description ("plast ica" → "disney palla di
+  /// nat"). Only priceless-to-priceless: priced rows keep their shape,
+  /// so genuine short products after priced rows survive.
+  static void _mergeShortDescs(List<_RawItem> items) {
+    for (var k = 1; k < items.length; k++) {
+      final cur = items[k];
+      if (cur.price != null) continue;
+      if (cur.desc.trim().length >= 15) continue;
+      final prev = items[k - 1];
+      if (prev.price != null) continue;
+      prev.desc = '${prev.desc} ${cur.desc}';
+      items.removeAt(k);
+      k--;
+    }
+  }
+
+  /// Positional zip for two-column layouts: bare amounts after the
+  /// currency marker ("EUR") pair in order with priceless descriptions.
+  /// Guards: no marker → nothing; the IVA-summary trio precedes the
+  /// marker and stays out; stops at payment keywords; leftovers on
+  /// either side keep their shape.
+  static void _pairPositional(
+    List<_RawItem> items,
+    List<String> lines,
+    int bodyEnd,
+  ) {
+    var eur = -1;
+    for (var i = bodyEnd; i < lines.length; i++) {
+      if (_isEurMarker(lines[i])) eur = i;
+    }
+    if (eur < 0) return;
+    final amounts = <double>[];
+    for (var i = eur + 1; i < lines.length; i++) {
+      final line = lines[i];
+      if (_isPaymentStop(line)) break;
+      final m = t.amountPattern.firstMatch(line);
+      if (m == null) continue;
+      final remainder = line.replaceFirst(m.group(0)!, '').trim();
+      if (t.letterTokens(remainder).any((w) => w.length >= 2)) continue;
+      amounts.add(t.parseItalianAmount(m.group(1)!));
+    }
+    var k = 0;
+    for (final item in items) {
+      if (k >= amounts.length) break;
+      if (item.price != null) continue;
+      item.price = amounts[k];
+      k++;
+    }
+  }
+
+  static bool _isEurMarker(String line) {
+    if (t.amountPattern.hasMatch(line)) return false;
+    final norm = line.replaceAll(RegExp(r'[^a-zA-Z€]'), '').toUpperCase();
+    return norm == 'EUR' || norm == '€' || norm == 'EURO';
+  }
+
+  static final _paymentStopWords = {
+    'debit',
+    'mastercard',
+    'maestro',
+    'visa',
+    'bancomat',
+    'pagobancomat',
+  };
+
+  static bool _isPaymentStop(String line) {
+    final key = t.keywordForm(line);
+    if (t.totalKeywordPattern.hasMatch(key) ||
+        t.subtotalPattern.hasMatch(key) ||
+        t.restoPattern.hasMatch(line.toUpperCase())) {
+      return true;
+    }
+    return t.letterTokens(line).any(_paymentStopWords.contains);
   }
 
   /// Attaches one fragment row to the nearest priced item (gap ≤ 2 rows,

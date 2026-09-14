@@ -67,6 +67,18 @@ void main() {
     expect(layout.sumOk, isFalse);
   });
 
+  test('action tail prices zip in order after EUR, IVA trio excluded', () {
+    final lines = actionFixture.ocr.split('\n').map((l) => l.trim()).toList();
+    final layout = ReceiptLayoutParser.parse(lines, null, 52.49);
+    final priced = layout.items.where((e) => e.price != null).toList();
+    expect(priced, isNotEmpty);
+    // First paired price is the first product price, never IVA figures.
+    expect(priced.first.price, 7.95);
+    for (final e in priced) {
+      expect(e.price, isNot(anyOf(0.12, 8.93, 9.05)));
+    }
+  });
+
   test('sconto attaches to the item above and corrects it', () {
     const ocr = 'SHOP\nPANE 5,00\nSCONTO TESSERA 1,00\nTOTALE 4,00';
     final layout = ReceiptLayoutParser.parse(_lines(ocr), null, 4.00);

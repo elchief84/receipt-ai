@@ -82,6 +82,8 @@ const metaWords = {
   'rt', // matricola line, never a product
   'documento',
   'commerciale',
+  'vendita',
+  'prestazione',
   'numero',
   'articoli', // "NUMERO DI ARTICOLI" trailer (product bodies use ARTICOLI header instead — see bodyStartMarkers)
   'server',

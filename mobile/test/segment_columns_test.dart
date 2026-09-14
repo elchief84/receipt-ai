@@ -30,7 +30,7 @@ List<Rect?> boxesLikeMlKit() => [
     ];
 
 void main() {
-  test('without boxes prices stay orphaned', () {
+  test('without boxes each description stays separate', () {
     final items = TransactionExtractor.segmentItems(lines);
     expect(items.map((e) => e.description).toList(), hasLength(3));
     expect(items.every((e) => e.price == null), isTrue);

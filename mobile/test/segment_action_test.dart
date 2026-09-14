@@ -57,8 +57,12 @@ void main() {
       actionOcr.split('\n').map((l) => l.trim()).toList(),
     );
     final descs = items.map((e) => e.description).toList();
-    expect(descs, contains('disney palla di nat'));
-    expect(descs, contains('detersivo piatti a good'));
+    expect(descs.any((d) => d.contains('alzata')), isTrue);
+    expect(descs.any((d) => d.contains('disney palla di nat')), isTrue);
+    expect(descs.any((d) => d.contains('disney figura')), isTrue);
+    expect(descs.any((d) => d.contains('detersivo piatti')), isTrue);
+    expect(descs.any((d) => d.contains('1ibro da colorare')), isTrue);
+    expect(descs.any((d) => d.contains('lavagnetta')), isTrue);
     expect(descs.any((d) => d.contains('Auth')), isFalse);
     expect(descs.any((d) => d.contains('DOCUMENTO')), isFalse);
     expect(descs.any((d) => RegExp(r'^\d+$').hasMatch(d)), isFalse);
