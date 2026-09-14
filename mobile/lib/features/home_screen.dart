@@ -33,6 +33,19 @@ class HomeScreen extends StatelessWidget {
     if (!context.mounted) return;
     final result = await ocr.recognize(image.path);
     debugPrint('[OCR-TEXT-START]\n${result.text}\n[OCR-TEXT-END]');
+    // Geometry dump: what the parser actually sees (line + box). This
+    // is the data flattened OCR text loses — two-column pairing and
+    // row order live here.
+    debugPrint('[OCR-GEOM-START]');
+    for (final l in result.lines) {
+      final b = l.box;
+      debugPrint(
+        'G ${b.left.toStringAsFixed(0)} ${b.top.toStringAsFixed(0)} '
+        '${b.right.toStringAsFixed(0)} ${b.bottom.toStringAsFixed(0)} '
+        '| ${l.text}',
+      );
+    }
+    debugPrint('[OCR-GEOM-END]');
     if (!context.mounted) return;
     if (result.confidence < 0.5 || result.text.trim().length < 20) {
       ScaffoldMessenger.of(context).showSnackBar(

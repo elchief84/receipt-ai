@@ -82,4 +82,34 @@ void main() {
     expect(items.first.description, 'disney figura led con ventosa');
     expect(items.first.price, 58.24);
   });
+
+  test('tilted photo still pairs rows in physical order', () {
+    // 8px drift across a 55px column gap (~8° tilt): overlap-only
+    // clustering breaks here; the de-skew estimate must recover it.
+    const ls = [
+      'ARTICOLI',
+      'disney palla di nat',
+      'detersivo piatti',
+      'harry potter quilling',
+      'TOTALE',
+      '7,95',
+      '3,99',
+      '2,99',
+    ];
+    final boxes = <Rect?>[
+      const Rect.fromLTWH(0, 0, 100, 10), // ARTICOLI
+      const Rect.fromLTWH(0, 10, 60, 10),
+      const Rect.fromLTWH(0, 30, 60, 10),
+      const Rect.fromLTWH(0, 50, 60, 10),
+      const Rect.fromLTWH(0, 90, 60, 10), // TOTALE
+      const Rect.fromLTWH(70, 18, 30, 10), // 7,95 drifted +8
+      const Rect.fromLTWH(70, 38, 30, 10), // 3,99 drifted +8
+      const Rect.fromLTWH(70, 58, 30, 10), // 2,99 drifted +8
+    ];
+    final items = TransactionExtractor.segmentItems(ls, boxes);
+    expect(items.map((e) => e.description).toList(), hasLength(3));
+    expect(items[0].price, 7.95);
+    expect(items[1].price, 3.99);
+    expect(items[2].price, 2.99);
+  });
 }

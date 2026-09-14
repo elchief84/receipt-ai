@@ -101,13 +101,16 @@ class ReceiptLayoutParser {
     }
 
     final raw = _groupItems(rows, kinds, start, end);
+    // NOTE: declared count is NOT a merge guard — OCR routinely drops
+    // product lines, so raw rows != declared items even when parsed
+    // perfectly. Continuation merging stays unconditional.
     _mergeShortDescs(raw);
     _pairPositional(raw, lines, end);
     final items = [
       for (final e in raw) SegmentedItem(e.desc, e.price),
     ];
-    final declared = _declaredCount(lines);
     final repaired = _repair(items, rows, kinds, end, total);
+    final declared = _declaredCount(lines);
     return ReceiptLayout(
       items: repaired,
       sumOk: _sumCheck(repaired, total),
@@ -133,6 +136,11 @@ class ReceiptLayoutParser {
 
   // ---- Phase 1: visual rows -------------------------------------------
 
+  /// Builds visual rows in canonical reading order (top→bottom, left→
+  /// right), tilt-corrected. Two defects this replaces:
+  /// - rows were re-sorted by ML Kit EMISSION index, scrambling the
+  ///   physical order ("righe mischiate");
+  /// - overlap clustering tolerated ~2° of tilt only.
   static List<LayoutRow> _buildRows(List<String> lines, List<Rect?>? boxes) {
     if (boxes == null) {
       return [
@@ -140,55 +148,91 @@ class ReceiptLayoutParser {
           LayoutRow([i], lines[i], null),
       ];
     }
-    final order = List<int>.generate(lines.length, (i) => i)
+    final boxOf = <int, Rect>{};
+    for (var i = 0; i < lines.length; i++) {
+      final b = boxes[i];
+      if (b != null && b.height > 0 && b.width > 0) boxOf[i] = b;
+    }
+    if (boxOf.isEmpty) {
+      return [
+        for (var i = 0; i < lines.length; i++)
+          LayoutRow([i], lines[i], null),
+      ];
+    }
+    final idxs = boxOf.keys.toList()..sort();
+    final heights = idxs.map((i) => boxOf[i]!.height).toList()..sort();
+    final hMed = heights[heights.length ~/ 2];
+    var minX = double.infinity;
+    var maxX = double.negativeInfinity;
+    for (final b in boxOf.values) {
+      if (b.left < minX) minX = b.left;
+      if (b.right > maxX) maxX = b.right;
+    }
+    final pageW = maxX - minX > 1 ? maxX - minX : 1.0;
+
+    // Tilt estimate: only cross-column, vertically-close pairs carry the
+    // angle (same physical row, different x). Left-column-only pairs
+    // would conflate content drift with tilt. Median for robustness.
+    final samples = <double>[];
+    for (var a = 0; a < idxs.length; a++) {
+      for (var b = a + 1; b < idxs.length; b++) {
+        final ra = boxOf[idxs[a]]!;
+        final rb = boxOf[idxs[b]]!;
+        final gap = rb.left >= ra.left ? rb.left - ra.right : ra.left - rb.right;
+        if (gap < 0 || gap > pageW * 0.35) continue;
+        final cya = (ra.top + ra.bottom) / 2;
+        final cyb = (rb.top + rb.bottom) / 2;
+        if ((cya - cyb).abs() > 0.8 * hMed) continue;
+        final dxa = (ra.left + ra.right) / 2;
+        final dxb = (rb.left + rb.right) / 2;
+        final dx = dxb - dxa;
+        if (dx.abs() < 1) continue;
+        samples.add((cyb - cya) / dx);
+      }
+    }
+    samples.sort();
+    var slope = samples.length >= 3 ? samples[samples.length ~/ 2] : 0.0;
+    if (slope.abs() > 0.15) slope = 0.0; // >8.5°: garbage, trust nothing
+
+    double deskew(int i) {
+      final b = boxOf[i]!;
+      return (b.top + b.bottom) / 2 - slope * (b.left + b.right) / 2;
+    }
+
+    final ordered = idxs.toList()
       ..sort((a, b) {
-        final ta = boxes[a]?.top ?? a * 1e6;
-        final tb = boxes[b]?.top ?? b * 1e6;
-        final dy = ta.compareTo(tb);
-        if (dy != 0) return dy;
-        final la = boxes[a]?.left ?? 0.0;
-        final lb = boxes[b]?.left ?? 0.0;
-        final dx = la.compareTo(lb);
-        return dx != 0 ? dx : a.compareTo(b);
+        final d = deskew(a).compareTo(deskew(b));
+        if (d != 0) return d;
+        return boxOf[a]!.left.compareTo(boxOf[b]!.left);
       });
-    final rows = <LayoutRow>[];
-    for (final idx in order) {
-      final box = boxes[idx];
+
+    final building = <_RowBuild>[];
+    for (final idx in ordered) {
+      final y = deskew(idx);
+      final h = boxOf[idx]!.height;
       var placed = false;
-      if (box != null) {
-        for (final row in rows) {
-          if (row.box == null) continue;
-          if (_yOverlapRatio(box, row.box!) >= rowOverlap) {
-            row.indices.add(idx);
-            placed = true;
-            break;
-          }
+      for (final r in building) {
+        if ((y - r.y).abs() <= 0.7 * (h > r.h ? h : r.h)) {
+          r.indices.add(idx);
+          placed = true;
+          break;
         }
       }
-      if (!placed) rows.add(LayoutRow([idx], '', box));
+      if (!placed) building.add(_RowBuild(y, h, idx));
     }
-    for (final row in rows) {
-      row.indices.sort();
+    // Null-box lines (rare on ML Kit): appended in emission order.
+    for (var i = 0; i < lines.length; i++) {
+      if (boxOf.containsKey(i)) continue;
+      building.add(_RowBuild(1e9 + i, 1, i));
     }
-    rows.sort((a, b) => a.indices.first.compareTo(b.indices.first));
     return [
-      for (final row in rows)
+      for (final r in building)
         LayoutRow(
-          row.indices,
-          row.indices.map((i) => lines[i]).join(' '),
-          row.box,
+          r.indices..sort((a, b) => boxOf[a]!.left.compareTo(boxOf[b]!.left)),
+          r.indices.map((i) => lines[i]).join(' '),
+          boxOf[r.indices.first],
         ),
     ];
-  }
-
-  static double _yOverlapRatio(Rect a, Rect b) {
-    final top = a.top > b.top ? a.top : b.top;
-    final bottom = a.bottom < b.bottom ? a.bottom : b.bottom;
-    final overlap = bottom - top;
-    if (overlap <= 0) return 0;
-    final minHeight = a.height < b.height ? a.height : b.height;
-    if (minHeight <= 0) return 0;
-    return overlap / minHeight;
   }
 
   // ---- Phase 2: row typing --------------------------------------------
@@ -569,4 +613,11 @@ class _RawItem {
   String desc;
   double? price;
   final int row;
+}
+
+class _RowBuild {
+  _RowBuild(this.y, this.h, int firstIdx) : indices = [firstIdx];
+  final double y;
+  final double h;
+  final List<int> indices;
 }
