@@ -62,7 +62,8 @@ void main() {
     expect(descs.any((d) => d.contains('disney figura')), isTrue);
     expect(descs.any((d) => d.contains('detersivo piatti')), isTrue);
     expect(descs.any((d) => d.contains('1ibro da colorare')), isTrue);
-    expect(descs.any((d) => d.contains('lavagnetta')), isTrue);
+    expect(descs.any((d) => d.contains('lavagnetta in feltro 30x45cm')),
+        isTrue);
     expect(descs.any((d) => d.contains('Auth')), isFalse);
     expect(descs.any((d) => d.contains('DOCUMENTO')), isFalse);
     expect(descs.any((d) => RegExp(r'^\d+$').hasMatch(d)), isFalse);

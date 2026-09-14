@@ -374,21 +374,33 @@ class ReceiptLayoutParser {
     return items;
   }
 
-  /// Short-merge: a short (< 15 chars) priceless description joins the
-  /// previous priceless description ("plast ica" → "disney palla di
-  /// nat"). Only priceless-to-priceless: priced rows keep their shape,
-  /// so genuine short products after priced rows survive.
+  /// Short-merge: a continuation line joins the previous priceless
+  /// description. Continuation = short fragment ("plast ica") or a
+  /// measurement ("30x45cm", "500 ml") — never a standalone product.
+  /// Only priceless-to-priceless: priced rows keep their shape, so
+  /// genuine short products after priced rows survive.
   static void _mergeShortDescs(List<_RawItem> items) {
     for (var k = 1; k < items.length; k++) {
       final cur = items[k];
       if (cur.price != null) continue;
-      if (cur.desc.trim().length >= 15) continue;
+      if (!_isContinuation(cur.desc)) continue;
       final prev = items[k - 1];
       if (prev.price != null) continue;
       prev.desc = '${prev.desc} ${cur.desc}';
       items.removeAt(k);
       k--;
     }
+  }
+
+  static final _measurePattern = RegExp(
+    r'^[\dx×,.\s/\-]*\s*(cm|mm|kg|g|ml|l|cl|pz|gr|m|lt)\.?$',
+    caseSensitive: false,
+  );
+
+  static bool _isContinuation(String desc) {
+    final text = desc.trim();
+    if (text.length < 15) return true;
+    return _measurePattern.hasMatch(text);
   }
 
   /// Positional zip for two-column layouts: bare amounts after the
