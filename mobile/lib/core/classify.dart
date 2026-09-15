@@ -47,11 +47,17 @@ class ClassificationResult {
   ConfidenceLevel get level => levelFor(confidence);
 }
 
+/// Label shown when the model couldn't classify an item.
+/// A display-level state, NOT a taxonomy category: the model can never
+/// output it, so it stays out of expenseCategories and the training data
+/// (ADR-0010). Distinct from `other` ("understood, fits nowhere").
+const unknownItemCategoryLabel = 'Sconosciuta';
+
 /// Per-item label (ADR-0007): secondary signal. Category is null when the
 /// model is low-confidence — the row still shows (description + price),
 /// because on segmented products even an unlabeled row informs.
 class ItemClassification {
-  ItemClassification({
+  const ItemClassification({
     required this.description,
     required this.category,
     required this.confidence,
@@ -60,6 +66,10 @@ class ItemClassification {
   final String description;
   final String? category;
   final double confidence;
+
+  /// True when the model couldn't decide: render [unknownItemCategoryLabel],
+  /// never silently bucket into a real category (ADR-0010).
+  bool get isUnknown => category == null;
 
   /// Item price from segmentation; null when prices print only in totals.
   /// When a receipt holds a single such item, the pipeline assigns it

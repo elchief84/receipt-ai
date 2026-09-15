@@ -37,8 +37,7 @@ void main() {
     expect(levelFor(0.1), ConfidenceLevel.low);
   });
 
-  test('keyword fallback never crashes and stays in taxonomy', () {
-    final clf = KeywordClassifier();
+  test('keyword fallback never crashes and stays in taxonomy', () {    final clf = KeywordClassifier();
     const categories = [
       'groceries',
       'restaurants',
@@ -53,5 +52,22 @@ void main() {
     final res = clf.classify(input('xyz', 'other', 'pane latte supermercato'));
     expect(categories, contains(res.category));
     expect(res.category, 'groceries');
+  });
+
+  test('item without category is explicitly unknown, never shopping', () {
+    const unlabeled = ItemClassification(
+      description: 'scontrino parlante',
+      category: null,
+      confidence: 0.2,
+    );
+    expect(unlabeled.isUnknown, isTrue);
+    expect(unlabeled.category, isNot('shopping'));
+    expect(unknownItemCategoryLabel, isNotEmpty);
+    const labeled = ItemClassification(
+      description: 'pane',
+      category: 'groceries',
+      confidence: 0.9,
+    );
+    expect(labeled.isUnknown, isFalse);
   });
 }

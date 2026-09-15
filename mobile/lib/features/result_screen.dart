@@ -27,12 +27,14 @@ class ResultScreen extends StatefulWidget {
 
 class _ResultScreenState extends State<ResultScreen> {
   late String _category;
+  late List<ItemClassification> _items;
   var _showOcr = false;
 
   @override
   void initState() {
     super.initState();
     _category = widget.result.category;
+    _items = List.of(widget.result.itemDetails);
   }
 
   void _confirm(bool corrected) {
@@ -46,7 +48,9 @@ class _ResultScreenState extends State<ResultScreen> {
         timestamp: DateTime.now(),
       ),
     );
-    widget.history.add(widget.result.copyWith(category: _category));
+    widget.history.add(
+      widget.result.copyWith(category: _category, itemDetails: _items),
+    );
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -58,22 +62,57 @@ class _ResultScreenState extends State<ResultScreen> {
     );
   }
 
-  Future<void> _changeCategory() async {
-    final selected = await showDialog<String>(
-      context: context,
-      builder: (context) => SimpleDialog(
-        title: const Text('Change category'),
-        children: expenseCategories
-            .map(
-              (c) => SimpleDialogOption(
-                key: Key('category-$c'),
-                onPressed: () => Navigator.of(context).pop(c),
-                child: Text(c),
-              ),
-            )
-            .toList(),
+  Future<String?> _pickCategory(String title) => showDialog<String>(
+    context: context,
+    builder: (context) => SimpleDialog(
+      title: Text(title),
+      children: expenseCategories
+          .map(
+            (c) => SimpleDialogOption(
+              key: Key('category-$c'),
+              onPressed: () => Navigator.of(context).pop(c),
+              child: Text(c),
+            ),
+          )
+          .toList(),
+    ),
+  );
+
+  Future<void> _correctItem(int index) async {
+    final item = _items[index];
+    final messenger = ScaffoldMessenger.of(context);
+    final selected = await _pickCategory(item.description);
+    if (selected == null) return;
+    setState(() {
+      _items[index] = ItemClassification(
+        description: item.description,
+        category: selected,
+        confidence: item.confidence,
+        price: item.price,
+      );
+    });
+    widget.feedback.record(
+      FeedbackEntry(
+        originalCategory: item.category ?? 'unknown',
+        correctedCategory: selected,
+        merchantNormalized: widget.result.merchantNormalized,
+        total: item.price ?? 0.0,
+        modelVersion: widget.result.modelVersion,
+        timestamp: DateTime.now(),
+        itemDescription: item.description,
       ),
     );
+    if (context.mounted) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Correzione registrata: $selected'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _changeCategory() async {
+    final selected = await _pickCategory('Change category');
     if (selected != null) {
       setState(() => _category = selected);
       _confirm(true);
@@ -121,16 +160,16 @@ class _ResultScreenState extends State<ResultScreen> {
           const SizedBox(height: 8),
           Text('Merchant: ${r.merchantNormalized} (${r.merchantType})'),
           Text('Date: ${r.date}'),
-          if (r.itemDetails.isNotEmpty) ...[
+          if (_items.isNotEmpty) ...[
             const SizedBox(height: 8),
             const Text('Dettaglio items'),
-            ...r.itemDetails.asMap().entries.map(
+            ..._items.asMap().entries.map(
               (e) {
                 final parts = <String>[];
                 if (e.value.price != null) {
                   parts.add('€${e.value.price!.toStringAsFixed(2)}');
                 }
-                if (e.value.category != null) parts.add(e.value.category!);
+                parts.add(e.value.category ?? unknownItemCategoryLabel);
                 return ListTile(
                   key: Key('itemDetail-${e.key}'),
                   dense: true,
@@ -142,7 +181,14 @@ class _ResultScreenState extends State<ResultScreen> {
                   trailing: Text(
                     parts.join(' · '),
                     key: Key('itemDetail-price-${e.key}'),
+                    style: e.value.isUnknown
+                        ? const TextStyle(
+                            color: Colors.grey,
+                            fontStyle: FontStyle.italic,
+                          )
+                        : null,
                   ),
+                  onTap: () => _correctItem(e.key),
                 );
               },
             ),

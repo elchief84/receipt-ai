@@ -32,6 +32,10 @@ _Avoid_: Categorization, Labeling
 Stima del modello sulla correttezza della classificazione (high / medium / low da soglie configurabili).
 _Avoid_: Score, Probability
 
+**Unknown**:
+Stato di una riga item che il modello non ha saputo classificare (confidence sotto soglia). Non è una expense_category: è mostrato come "Sconosciuta" e invitato alla correzione, che alimenta il Feedback.
+_Avoid_: Other ("capito, non rientra"), shopping (mai come fallback)
+
 **Feedback**:
 Correzione dell'utente registrata come dato per futuro retraining, mai applicata online al modello.
 _Avoid_: Retraining, Online learning

@@ -8,6 +8,8 @@ import 'package:receipt_ai/core/merchant.dart';
 import 'package:receipt_ai/core/ocr.dart';
 import 'package:receipt_ai/core/pipeline.dart';
 import 'package:receipt_ai/features/home_screen.dart';
+import 'package:receipt_ai/features/result_screen.dart';
+import 'package:receipt_ai/features/summary_screen.dart';
 
 ReceiptPipeline testPipeline() => ReceiptPipeline(
   extractor: TransactionExtractor(),
@@ -97,8 +99,7 @@ void main() {
     expect(find.textContaining('groceries'), findsWidgets);
   });
 
-  testWidgets('unsupported document shows error, no result', (tester) async {
-    const unsupported = (
+  testWidgets('unsupported document shows error, no result', (tester) async {    const unsupported = (
       name: 'Amazon',
       text: 'Riepilogo dell\'ordine\nVenduto da: Amazon.it\nTotale: 10,00',
     );
@@ -118,6 +119,97 @@ void main() {
 
     expect(find.textContaining('Documento non supportato'), findsOneWidget);
     expect(find.byKey(const Key('total')), findsNothing);
+  });
+
+  testWidgets('unknown item shows Sconosciuta and can be corrected', (
+    tester,
+  ) async {
+    TransactionResult unknownResult() => TransactionResult(
+      merchantRaw: 'Amazon',
+      merchantNormalized: 'amazon',
+      merchantType: 'ecommerce',
+      date: '09/08/2026',
+      total: 29.99,
+      currency: 'EUR',
+      category: 'technology',
+      confidence: 0.8,
+      modelVersion: 'test',
+      ocrText: '',
+      items: const [],
+      itemDetails: const [
+        ItemClassification(
+          description: 'misterioso aggeggio',
+          category: null,
+          confidence: 0.2,
+          price: 29.99,
+        ),
+      ],
+    );
+    final feedback = InMemoryFeedbackLog();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ResultScreen(
+          result: unknownResult(),
+          feedback: feedback,
+          pipeline: testPipeline(),
+          history: HistoryLog(),
+        ),
+      ),
+    );
+
+    expect(find.textContaining('Sconosciuta'), findsOneWidget);
+    expect(find.textContaining('shopping'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('itemDetail-0')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('category-technology')));
+    await tester.pumpAndSettle();
+
+    final trailing =
+        tester.widget<Text>(find.byKey(const Key('itemDetail-price-0')));
+    expect(trailing.data, contains('technology'));
+    expect(trailing.data, isNot(contains('Sconosciuta')));
+    expect(find.textContaining('Sconosciuta'), findsNothing);
+    expect(feedback.entries, hasLength(1));
+    expect(feedback.entries.first.originalCategory, 'unknown');
+    expect(feedback.entries.first.correctedCategory, 'technology');
+    expect(
+      feedback.entries.first.itemDescription,
+      'misterioso aggeggio',
+    );
+  });
+
+  testWidgets('summary shows items to verify', (tester) async {
+    final history = HistoryLog();
+    history.add(
+      TransactionResult(
+        merchantRaw: 'Amazon',
+        merchantNormalized: 'amazon',
+        merchantType: 'ecommerce',
+        date: '09/08/2026',
+        total: 29.99,
+        currency: 'EUR',
+        category: 'technology',
+        confidence: 0.8,
+        modelVersion: 'test',
+        ocrText: '',
+        items: const [],
+        itemDetails: const [
+          ItemClassification(
+            description: 'misterioso aggeggio',
+            category: null,
+            confidence: 0.2,
+            price: 29.99,
+          ),
+        ],
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(home: SummaryScreen(history: history)),
+    );
+
+    expect(find.byKey(const Key('summary-unknown')), findsOneWidget);
+    expect(find.byKey(const Key('summary-technology')), findsOneWidget);
   });
 }
 

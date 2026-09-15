@@ -46,7 +46,10 @@ class TransactionResult {
   /// unverifiable (no priced items).
   final bool? sumCheck;
 
-  TransactionResult copyWith({String? category}) => TransactionResult(
+  TransactionResult copyWith({
+    String? category,
+    List<ItemClassification>? itemDetails,
+  }) => TransactionResult(
     merchantRaw: merchantRaw,
     merchantNormalized: merchantNormalized,
     merchantType: merchantType,
@@ -58,7 +61,7 @@ class TransactionResult {
     modelVersion: modelVersion,
     ocrText: ocrText,
     items: items,
-    itemDetails: itemDetails,
+    itemDetails: itemDetails ?? this.itemDetails,
     sumCheck: sumCheck,
   );
 }

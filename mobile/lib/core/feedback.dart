@@ -12,6 +12,7 @@ class FeedbackEntry {
     required this.total,
     required this.modelVersion,
     required this.timestamp,
+    this.itemDescription,
   });
   final String originalCategory;
   final String correctedCategory;
@@ -20,6 +21,10 @@ class FeedbackEntry {
   final String modelVersion;
   final DateTime timestamp;
 
+  /// Set for per-item corrections (originalCategory 'unknown' when the
+  /// model couldn't decide). Null for transaction-level corrections.
+  final String? itemDescription;
+
   Map<String, dynamic> toJson() => {
     'original_category': originalCategory,
     'corrected_category': correctedCategory,
@@ -27,6 +32,7 @@ class FeedbackEntry {
     'total': total,
     'model_version': modelVersion,
     'timestamp': timestamp.toIso8601String(),
+    if (itemDescription != null) 'item_description': itemDescription,
   };
 
   factory FeedbackEntry.fromJson(Map<String, dynamic> json) => FeedbackEntry(
@@ -36,6 +42,8 @@ class FeedbackEntry {
     total: (json['total'] as num).toDouble(),
     modelVersion: json['model_version'] as String,
     timestamp: DateTime.parse(json['timestamp'] as String),
+    // Old log files predate item corrections.
+    itemDescription: json['item_description'] as String?,
   );
 }
 
