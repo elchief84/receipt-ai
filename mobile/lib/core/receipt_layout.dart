@@ -379,8 +379,17 @@ class ReceiptLayoutParser {
       if (boxOf.containsKey(i)) continue;
       building.add(_RowBuild(1e9 + i, 1, i));
     }
+    // Physical order: bare amounts that did not attach are created last,
+    // but they belong inline by position. Without this the trailer ends
+    // before them and body grouping never sees the price rows.
+    final orderedRows = building.toList()
+      ..sort((a, b) {
+        final d = a.top.compareTo(b.top);
+        if (d != 0) return d;
+        return a.bottom.compareTo(b.bottom);
+      });
     return [
-      for (final r in building)
+      for (final r in orderedRows)
         LayoutRow(
           r.indices..sort((a, b) => boxOf[a]!.left.compareTo(boxOf[b]!.left)),
           r.indices.map((i) => lines[i]).join(' '),
@@ -896,23 +905,27 @@ class ReceiptLayoutParser {
     Set<int> consumedBare,
     bool hasGeometry,
   ) {
-    final amounts = <double>[];
+    final pairs = <({int row, double amount})>[];
     if (hasGeometry) {
+      // Bare rows are appended after the text rows, so they are NOT
+      // contiguous with [start,end): select by PHYSICAL position, not
+      // list index, or every bare amount past the trailer is lost.
       final boundY =
           end < rows.length ? _centerY(rows[end]) : double.infinity;
-      var specificaIdx = rows.length;
-      for (var i = end; i < rows.length; i++) {
+      double? specificaY;
+      for (var i = 0; i < rows.length; i++) {
         if (_hasToken(rows[i].text, 'specifica')) {
-          specificaIdx = i;
+          specificaY = _centerY(rows[i]);
           break;
         }
       }
       final candidates = <int>[];
-      for (var i = start; i < end; i++) {
+      for (var i = 0; i < rows.length; i++) {
         if (kinds[i] != RowKind.bare) continue;
         if (consumedBare.contains(i)) continue;
-        if (_centerY(rows[i]) >= boundY) continue;
-        if (i >= specificaIdx) continue;
+        final cy = _centerY(rows[i]);
+        if (cy >= boundY) continue;
+        if (specificaY != null && cy >= specificaY) continue;
         if (!t.amountPattern.hasMatch(rows[i].text)) continue;
         candidates.add(i);
       }
@@ -938,7 +951,7 @@ class ReceiptLayoutParser {
       for (final i in ordered) {
         final m = t.amountPattern.firstMatch(rows[i].text);
         if (m == null) continue;
-        amounts.add(t.parseItalianAmount(m.group(1)!));
+        pairs.add((row: i, amount: t.parseItalianAmount(m.group(1)!)));
       }
     } else {
       final lines = [for (final r in rows) r.text];
@@ -954,15 +967,59 @@ class ReceiptLayoutParser {
         if (m == null) continue;
         final remainder = line.replaceFirst(m.group(0)!, '').trim();
         if (t.letterTokens(remainder).any((w) => w.length >= 2)) continue;
-        amounts.add(t.parseItalianAmount(m.group(1)!));
+        pairs.add((row: -1, amount: t.parseItalianAmount(m.group(1)!)));
       }
     }
+    _assignPrices(items, pairs, rows);
+  }
+
+  /// Single seam that attaches leftover bare amounts to priceless items
+  /// (issue #17). One documented precedence, no scattered zips:
+  /// 1. VISUAL FIRST — an amount claims the priceless item on its own
+  ///    band (band gap ≤ one line). This is what fixes "prezzo sulla
+  ///    riga sbagliata" when the amount's row is near but not overlapping
+  ///    (Phase B's 0.3 threshold missed it) and the printed order differs
+  ///    from the physical one.
+  /// 2. POSITIONAL FALLBACK — remaining amounts pair in order with
+  ///    remaining items (the legacy zip for separate price blocks and
+  ///    the no-geometry EUR tail).
+  static void _assignPrices(
+    List<_RawItem> items,
+    List<({int row, double amount})> pairs,
+    List<LayoutRow> rows,
+  ) {
+    final used = List<bool>.filled(pairs.length, false);
+    // 1. Visual: nearest item on the amount's band.
+    for (final item in items) {
+      if (item.price != null) continue;
+      var best = -1;
+      var bestGap = double.infinity;
+      for (var p = 0; p < pairs.length; p++) {
+        if (used[p]) continue;
+        final rowIdx = pairs[p].row;
+        if (rowIdx < 0) continue;
+        final gap = _rowGapY(rows, item.row, rowIdx);
+        if (gap > 1.0) continue;
+        if (gap < bestGap) {
+          bestGap = gap;
+          best = p;
+        }
+      }
+      if (best >= 0) {
+        item.price = pairs[best].amount;
+        used[best] = true;
+      }
+    }
+    // 2. Positional: whatever no band could claim.
     var k = 0;
     for (final item in items) {
-      if (k >= amounts.length) break;
       if (item.price != null) continue;
-      item.price = amounts[k];
-      k++;
+      while (k < pairs.length && used[k]) {
+        k++;
+      }
+      if (k >= pairs.length) break;
+      item.price = pairs[k].amount;
+      used[k] = true;
     }
   }
 
