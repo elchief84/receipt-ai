@@ -39,3 +39,7 @@ _Avoid_: Other ("capito, non rientra"), shopping (mai come fallback)
 **Feedback**:
 Correzione dell'utente registrata come dato per futuro retraining, mai applicata online al modello.
 _Avoid_: Retraining, Online learning
+
+**Debug corpus**:
+Foto reali dell'utente, in cartella locale `debug/` gitignored, usate solo per diagnosi/eval locale (ADR-0011). Mai training, mai commit.
+_Avoid_: Golden set, Test set

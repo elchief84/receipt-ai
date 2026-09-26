@@ -1,7 +1,7 @@
 /// OCR seam: text extraction from a document image.
 library;
 
-import 'dart:ui' show Rect;
+import 'dart:ui' show Offset, Rect;
 
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
@@ -17,9 +17,29 @@ class OcrResult {
 }
 
 class OcrLine {
-  OcrLine(this.text, this.box);
+  OcrLine(
+    this.text,
+    this.box, {
+    this.confidence,
+    this.angle,
+    this.corners = const [],
+  });
+
   final String text;
+
+  /// Axis-aligned bounding box (ML Kit `boundingBox`).
   final Rect box;
+
+  /// Per-line recognition confidence (ML Kit, 0..1), null when absent.
+  final double? confidence;
+
+  /// Per-line rotation in degrees (ML Kit `angle`), null when absent.
+  final double? angle;
+
+  /// The four rotated corners, clockwise from top-left (ML Kit
+  /// `cornerPoints`). Empty when absent. Preserves tilt/quad geometry the
+  /// axis-aligned [box] flattens.
+  final List<Offset> corners;
 
   /// Vertical overlap ratio over the smaller height (0..1).
   double yOverlap(OcrLine other) {
@@ -52,7 +72,18 @@ class MlKitOcrEngine implements OcrEngine {
       final lines = <OcrLine>[];
       for (final block in result.blocks) {
         for (final line in block.lines) {
-          lines.add(OcrLine(line.text.trim(), line.boundingBox));
+          lines.add(
+            OcrLine(
+              line.text.trim(),
+              line.boundingBox,
+              confidence: line.confidence,
+              angle: line.angle,
+              corners: [
+                for (final p in line.cornerPoints)
+                  Offset(p.x.toDouble(), p.y.toDouble()),
+              ],
+            ),
+          );
         }
       }
       final text = lines.map((l) => l.text).join('\n').trim();
@@ -68,7 +99,13 @@ class MlKitOcrEngine implements OcrEngine {
 
 /// Deterministic fake for widget/unit tests.
 class FakeOcrEngine implements OcrEngine {
-  FakeOcrEngine(this.text, {this.confidence = 1.0, this.geometry});
+  FakeOcrEngine(
+    this.text, {
+    this.confidence = 1.0,
+    this.geometry,
+    this.angles,
+    this.confidences,
+  });
 
   final String text;
   final double confidence;
@@ -76,6 +113,12 @@ class FakeOcrEngine implements OcrEngine {
   /// Optional boxes aligned 1:1 with text.split('\n'); stacked full-width
   /// fallbacks are generated when absent.
   final List<Rect>? geometry;
+
+  /// Optional per-line ML Kit angles (degrees), aligned with the rows.
+  final List<double?>? angles;
+
+  /// Optional per-line ML Kit confidences, aligned with the rows.
+  final List<double?>? confidences;
 
   @override
   Future<OcrResult> recognize(String imagePath) async {
@@ -85,7 +128,16 @@ class FakeOcrEngine implements OcrEngine {
       final box = (geometry != null && i < geometry!.length)
           ? geometry![i]
           : Rect.fromLTWH(0, i.toDouble(), 100, 1);
-      lines.add(OcrLine(rows[i], box));
+      lines.add(
+        OcrLine(
+          rows[i],
+          box,
+          angle: (angles != null && i < angles!.length) ? angles![i] : null,
+          confidence: (confidences != null && i < confidences!.length)
+              ? confidences![i]
+              : null,
+        ),
+      );
     }
     return OcrResult(text, confidence: confidence, lines: lines);
   }

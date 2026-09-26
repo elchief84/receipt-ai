@@ -2,8 +2,6 @@
 /// Single seam the UI and T4 summary walk through.
 library;
 
-import 'dart:ui' show Rect;
-
 import 'classify.dart';
 import 'extractor.dart';
 import 'merchant.dart';
@@ -76,12 +74,13 @@ class ReceiptPipeline {
   final MerchantNormalizer normalizer;
   final Classifier classifier;
 
-  TransactionResult run(String ocrText, {List<Rect?>? geometry}) {
+  TransactionResult run(String ocrText, {List<LineGeometry>? geometry}) {
     final draft = extractor.extract(ocrText);
     final lines = ocrText.split('\n').map((l) => l.trim()).toList();
     final merchant =
         normalizer.findInLines(lines) ?? normalizer.normalize(draft.merchantRaw);
-    final layout = ReceiptLayoutParser.parse(lines, geometry, draft.total);
+    final layout =
+        ReceiptLayoutParser.parseLines(lines, geometry, draft.total);
     final items = layout.items;
     final descriptions = items.map((e) => e.description).toList();
     final classification = classifier.classify(

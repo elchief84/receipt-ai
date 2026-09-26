@@ -8,18 +8,50 @@
 /// - itemCount: NUMERO DI ARTICOLI cross-check when printed
 library;
 
-import 'dart:ui' show Rect;
+import 'dart:math' as math;
+import 'dart:ui' show Offset, Rect;
 
 import 'package:flutter/foundation.dart';
 
 import 'receipt_text.dart' as t;
 
+/// Full geometry of one OCR line: the axis-aligned box plus the tilt
+/// (angle/corners) and confidence ML Kit already provides. [box] alone
+/// flattens tilt that the parser needs to de-skew real photos.
+class LineGeometry {
+  const LineGeometry(
+    this.box, {
+    this.angle,
+    this.corners = const [],
+    this.confidence,
+  });
+  final Rect box;
+  final double? angle;
+  final List<Offset> corners;
+  final double? confidence;
+}
+
 /// One visual row: OCR lines sharing a horizontal band, left to right.
 class LayoutRow {
-  LayoutRow(this.indices, this.text, this.box);
+  LayoutRow(
+    this.indices,
+    this.text,
+    this.box, {
+    this.confidence,
+    this.corners = const [],
+  });
   final List<int> indices;
   final String text;
   final Rect? box;
+
+  /// Lowest per-line OCR confidence in the row, null when unknown. Low
+  /// values mean the OCR is unsure: callers flag the row, never trust it
+  /// blindly.
+  final double? confidence;
+
+  /// Corners of the left-most member line, when available. Used for the
+  /// right-aligned price column (true right edge, not the padded box).
+  final List<Offset> corners;
 }
 
 enum RowKind {
@@ -33,11 +65,23 @@ enum RowKind {
   noise,
 }
 
+/// Minimum per-line OCR confidence to treat a parsed item as certain.
+/// Configurable: items below it are flagged, never silently trusted.
+const minLineConfidence = 0.6;
+
 /// A segmented product: description plus optional price.
 class SegmentedItem {
-  SegmentedItem(this.description, this.price);
+  SegmentedItem(this.description, this.price, {this.confidence});
   final String description;
   final double? price;
+
+  /// Lowest OCR confidence among the lines that formed this item, null
+  /// when unknown. Drives [isLowConfidence].
+  final double? confidence;
+
+  /// The OCR was unsure about this item: surface it as "da verificare".
+  bool get isLowConfidence =>
+      confidence != null && confidence! < minLineConfidence;
 }
 
 class ReceiptLayout {
@@ -55,19 +99,38 @@ class ReceiptLayout {
 
   /// From "NUMERO DI ARTICOLI: N", null when absent.
   final int? declaredCount;
+
+  /// Items whose OCR confidence is below [minLineConfidence].
+  int get lowConfidenceCount =>
+      items.where((e) => e.isLowConfidence).length;
 }
 
 class ReceiptLayoutParser {
   /// Minimum y-overlap (over smaller height) to share a visual row.
   static const rowOverlap = 0.3;
 
+  /// Back-compat entry point for callers that only have axis-aligned
+  /// boxes (samples, tests). Wraps each box as geometry with no tilt.
   static ReceiptLayout parse(
     List<String> lines,
     List<Rect?>? boxes,
     double total,
+  ) =>
+      parseLines(
+        lines,
+        boxes == null
+            ? null
+            : [for (final b in boxes) b == null ? null : LineGeometry(b)],
+        total,
+      );
+
+  static ReceiptLayout parseLines(
+    List<String> lines,
+    List<LineGeometry?>? geoms,
+    double total,
   ) {
-    final aligned = boxes != null && boxes.length == lines.length;
-    final rows = _buildRows(lines, aligned ? boxes : null);
+    final aligned = geoms != null && geoms.length == lines.length;
+    final rows = _buildRows(lines, aligned ? geoms : null);
     final kinds = rows.map(_typeRow).toList();
 
     // Body: last bodyStart .. first trailer (exclusive). Without a
@@ -112,7 +175,12 @@ class ReceiptLayoutParser {
     _mergeContinuations(raw, rows);
     _attachOrphans(raw, rows, total, _declaredCount(lines));
     final items = [
-      for (final e in raw) SegmentedItem(_stripLeadingCode(e.desc), e.price),
+      for (final e in raw)
+        SegmentedItem(
+          _stripLeadingCode(e.desc),
+          e.price,
+          confidence: e.confidence,
+        ),
     ];
     final repaired = _repair(items, rows, kinds, end, total);
     final declared = _declaredCount(lines);
@@ -146,25 +214,29 @@ class ReceiptLayoutParser {
   /// - rows were re-sorted by ML Kit EMISSION index, scrambling the
   ///   physical order ("righe mischiate");
   /// - overlap clustering tolerated ~2° of tilt only.
-  static List<LayoutRow> _buildRows(List<String> lines, List<Rect?>? boxes) {
-    if (boxes == null) {
+  static List<LayoutRow> _buildRows(
+    List<String> lines,
+    List<LineGeometry?>? geoms,
+  ) {
+    if (geoms == null) {
       return [
         for (var i = 0; i < lines.length; i++)
           LayoutRow([i], lines[i], null),
       ];
     }
-    final boxOf = <int, Rect>{};
+    final geomOf = <int, LineGeometry>{};
     for (var i = 0; i < lines.length; i++) {
-      final b = boxes[i];
-      if (b != null && b.height > 0 && b.width > 0) boxOf[i] = b;
+      final g = geoms[i];
+      if (g != null && g.box.height > 0 && g.box.width > 0) geomOf[i] = g;
     }
-    if (boxOf.isEmpty) {
+    if (geomOf.isEmpty) {
       return [
         for (var i = 0; i < lines.length; i++)
           LayoutRow([i], lines[i], null),
       ];
     }
-    final idxs = boxOf.keys.toList()..sort();
+    final boxOf = <int, Rect>{for (final e in geomOf.entries) e.key: e.value.box};
+    final idxs = geomOf.keys.toList()..sort();
     final heights = idxs.map((i) => boxOf[i]!.height).toList()..sort();
     final hMed = heights[heights.length ~/ 2];
     var minX = double.infinity;
@@ -175,28 +247,44 @@ class ReceiptLayoutParser {
     }
     final pageW = maxX - minX > 1 ? maxX - minX : 1.0;
 
-    // Tilt estimate: only cross-column, vertically-close pairs carry the
-    // angle (same physical row, different x). Left-column-only pairs
-    // would conflate content drift with tilt. Median for robustness.
-    final samples = <double>[];
-    for (var a = 0; a < idxs.length; a++) {
-      for (var b = a + 1; b < idxs.length; b++) {
-        final ra = boxOf[idxs[a]]!;
-        final rb = boxOf[idxs[b]]!;
-        final gap = rb.left >= ra.left ? rb.left - ra.right : ra.left - rb.right;
-        if (gap < 0 || gap > pageW * 0.35) continue;
-        final cya = (ra.top + ra.bottom) / 2;
-        final cyb = (rb.top + rb.bottom) / 2;
-        if ((cya - cyb).abs() > 0.8 * hMed) continue;
-        final dxa = (ra.left + ra.right) / 2;
-        final dxb = (rb.left + rb.right) / 2;
-        final dx = dxb - dxa;
-        if (dx.abs() < 1) continue;
-        samples.add((cyb - cya) / dx);
-      }
+    // Tilt estimate, best evidence first:
+    // 1. per-line tilt from ML Kit corners/angle (true geometry, robust
+    //    on real photos with perspective residue);
+    // 2. fallback: cross-column, vertically-close PAIRS of boxes carry
+    //    the angle (same physical row, different x). Left-column-only
+    //    pairs would conflate content drift with tilt. Median for
+    //    robustness.
+    final tiltSamples = <double>[];
+    for (final i in idxs) {
+      final s = _slopeFromGeometry(geomOf[i]!);
+      if (s != null && s.isFinite) tiltSamples.add(s);
     }
-    samples.sort();
-    var slope = samples.length >= 3 ? samples[samples.length ~/ 2] : 0.0;
+    double slope;
+    if (tiltSamples.isNotEmpty) {
+      tiltSamples.sort();
+      slope = tiltSamples[tiltSamples.length ~/ 2];
+    } else {
+      final samples = <double>[];
+      for (var a = 0; a < idxs.length; a++) {
+        for (var b = a + 1; b < idxs.length; b++) {
+          final ra = boxOf[idxs[a]]!;
+          final rb = boxOf[idxs[b]]!;
+          final gap =
+              rb.left >= ra.left ? rb.left - ra.right : ra.left - rb.right;
+          if (gap < 0 || gap > pageW * 0.35) continue;
+          final cya = (ra.top + ra.bottom) / 2;
+          final cyb = (rb.top + rb.bottom) / 2;
+          if ((cya - cyb).abs() > 0.8 * hMed) continue;
+          final dxa = (ra.left + ra.right) / 2;
+          final dxb = (rb.left + rb.right) / 2;
+          final dx = dxb - dxa;
+          if (dx.abs() < 1) continue;
+          samples.add((cyb - cya) / dx);
+        }
+      }
+      samples.sort();
+      slope = samples.length >= 3 ? samples[samples.length ~/ 2] : 0.0;
+    }
     if (slope.abs() > 0.15) slope = 0.0; // >8.5°: garbage, trust nothing
 
     double deskew(int i) {
@@ -297,8 +385,83 @@ class ReceiptLayoutParser {
           r.indices..sort((a, b) => boxOf[a]!.left.compareTo(boxOf[b]!.left)),
           r.indices.map((i) => lines[i]).join(' '),
           boxOf[r.indices.first],
+          confidence: _minConfidence(r.indices, geomOf),
+          corners: geomOf[r.indices.first]?.corners ?? const [],
         ),
     ];
+  }
+
+  /// Right edge of a row's left-most box: from corners when present (true
+  /// rotated right edge), else the axis-aligned box.
+  static double _rightEdge(LayoutRow row) {
+    if (row.corners.isNotEmpty) {
+      var maxX = double.negativeInfinity;
+      for (final c in row.corners) {
+        if (c.dx > maxX) maxX = c.dx;
+      }
+      if (maxX.isFinite) return maxX;
+    }
+    return row.box?.right ?? double.nan;
+  }
+
+  /// Detects a right-aligned price column among candidate bare rows: the
+  /// median right edge, kept only when at least 3 rows agree within a
+  /// tolerance of half their text height (right-aligned amounts line up;
+  /// centered/left numbers do not). Null when there is no such column.
+  static ({double right, int count})? detectPriceColumn(
+    List<LayoutRow> rows,
+    List<int> candidates,
+  ) {
+    final samples = <({double right, double h})>[];
+    for (final i in candidates) {
+      final r = rows[i];
+      final right = _rightEdge(r);
+      if (right.isNaN || !right.isFinite) continue;
+      final h = r.box?.height ?? 0;
+      samples.add((right: right, h: h > 0 ? h : 0));
+    }
+    if (samples.length < 3) return null;
+    final rights = [for (final s in samples) s.right]..sort();
+    final med = rights[rights.length ~/ 2];
+    final hs = [for (final s in samples) s.h]..sort();
+    final hMed = hs[hs.length ~/ 2] > 0 ? hs[hs.length ~/ 2] : 1.0;
+    final tol = 0.5 * hMed;
+    final aligned =
+        samples.where((s) => (s.right - med).abs() <= tol).length;
+    if (aligned * 3 < samples.length * 2) return null; // < ~66%
+    return (right: med, count: aligned);
+  }
+
+  /// Tilt of one line as a slope (dy/dx), from ML Kit corners when
+  /// present, else its rotation angle. Null when neither is available.
+  static double? _slopeFromGeometry(LineGeometry g) {
+    final c = g.corners;
+    if (c.length >= 2) {
+      final dx = c[1].dx - c[0].dx;
+      if (dx.abs() > 1) return (c[1].dy - c[0].dy) / dx;
+    }
+    final a = g.angle;
+    if (a != null) {
+      final slope = math.tan(a * math.pi / 180.0);
+      if (slope.isFinite) return slope;
+    }
+    return null;
+  }
+
+  /// Lowest known per-line OCR confidence in a row (null when all
+  /// unknown). Conservative: the row is only as trustworthy as its
+  /// weakest line.
+  static double? _minConfidence(
+    List<int> indices,
+    Map<int, LineGeometry> geomOf,
+  ) {
+    double? min;
+    for (final i in indices) {
+      final c = geomOf[i]?.confidence;
+      if (c == null) continue;
+      if (min == null || c < min) min = c;
+    }
+    return min;
   }
 
   // ---- Phase 2: row typing --------------------------------------------
@@ -321,6 +484,28 @@ class ReceiptLayoutParser {
   static final _rtMatricola =
       RegExp(r'\bRT\b\D{0,10}\d{6,}', caseSensitive: false);
 
+  /// Introspection for the debug overlay (issue #9): the typed visual
+  /// rows the parser builds, geometry included. Not a test-only seam —
+  /// the dev overlay screen consumes it.
+  static List<({LayoutRow row, RowKind kind})> typedRows(
+    List<String> lines,
+    List<LineGeometry?>? geoms,
+  ) {
+    final aligned = geoms != null && geoms.length == lines.length;
+    final rows = _buildRows(lines, aligned ? geoms : null);
+    return [for (final r in rows) (row: r, kind: _typeRow(r))];
+  }
+
+  /// Test seam: the visual rows the parser builds, geometry included.
+  @visibleForTesting
+  static List<LayoutRow> debugBuildRows(
+    List<String> lines,
+    List<LineGeometry?>? geoms,
+  ) {
+    final aligned = geoms != null && geoms.length == lines.length;
+    return _buildRows(lines, aligned ? geoms : null);
+  }
+
   /// Test seam: typed visual rows for a given input (what the parser
   /// actually sees, geometry included).
   @visibleForTesting
@@ -329,7 +514,12 @@ class ReceiptLayoutParser {
     List<Rect?>? boxes,
   ) {
     final aligned = boxes != null && boxes.length == lines.length;
-    final rows = _buildRows(lines, aligned ? boxes : null);
+    final rows = _buildRows(
+      lines,
+      aligned
+          ? [for (final b in boxes) b == null ? null : LineGeometry(b)]
+          : null,
+    );
     final kinds = rows.map(_typeRow).toList();
     return [
       for (var i = 0; i < rows.length; i++) (rows[i].text, kinds[i]),
@@ -427,6 +617,18 @@ class ReceiptLayoutParser {
     final pending = <int>[];
     final consumedBare = <int>{};
 
+    // Lowest OCR confidence among the rows that formed one item (null
+    // when all unknown): the item is only as certain as its weakest line.
+    double? minConf(Iterable<int> idxs) {
+      double? m;
+      for (final i in idxs) {
+        final c = rows[i].confidence;
+        if (c == null) continue;
+        if (m == null || c < m) m = c;
+      }
+      return m;
+    }
+
     void flushPending(double price, int rowIdx) {
       consumedBare.add(rowIdx);
       if (pending.isEmpty) return;
@@ -445,6 +647,7 @@ class ReceiptLayoutParser {
           pending.map((i) => rows[i].text.trim()).join(' '),
           price,
           pending.first,
+          confidence: minConf(pending),
         ),
       );
       pending.clear();
@@ -464,7 +667,7 @@ class ReceiptLayoutParser {
               row.text.replaceAll(t.amountPattern, '').trim();
           // Inline "DESC price": own item; orphans before it stay
           // pending for the next bare price (or body end).
-          items.add(_RawItem(remainder, price, i));
+          items.add(_RawItem(remainder, price, i, confidence: row.confidence));
         case RowKind.bare:
           // Bare price closes every pending description above
           // (two-column rows, "TOTALE\n13,60" splits).
@@ -477,7 +680,14 @@ class ReceiptLayoutParser {
           if (price == null) break;
           if (items.isNotEmpty) {
             final last = items.removeLast();
-            items.add(_RawItem(last.desc, last.price! - price, last.row));
+            items.add(
+              _RawItem(
+                last.desc,
+                last.price! - price,
+                last.row,
+                confidence: last.confidence,
+              ),
+            );
           }
           // Without a preceding item the discount has nothing to
           // attach to: dropped (never a product of its own).
@@ -499,11 +709,25 @@ class ReceiptLayoutParser {
       if (pricedRows.isEmpty && pending.length <= 2) {
         final joined = pending.map((i) => rows[i].text.trim()).join(' ');
         if (joined.isNotEmpty && joined.length <= 200) {
-          items.add(_RawItem(joined, null, pending.first));
+          items.add(
+            _RawItem(
+              joined,
+              null,
+              pending.first,
+              confidence: minConf(pending),
+            ),
+          );
         }
       } else if (pricedRows.isEmpty) {
         for (final i in pending) {
-          items.add(_RawItem(rows[i].text.trim(), null, i));
+          items.add(
+            _RawItem(
+              rows[i].text.trim(),
+              null,
+              i,
+              confidence: rows[i].confidence,
+            ),
+          );
         }
       } else {
         final firstPriced = pricedRows.reduce((a, b) => a < b ? a : b);
@@ -511,7 +735,14 @@ class ReceiptLayoutParser {
           if (kinds[i] == RowKind.fragment) {
             _attachOne(items, rows, i);
           } else if (i > firstPriced) {
-            items.add(_RawItem(rows[i].text.trim(), null, i));
+            items.add(
+              _RawItem(
+                rows[i].text.trim(),
+                null,
+                i,
+                confidence: rows[i].confidence,
+              ),
+            );
           }
         }
       }
@@ -567,6 +798,7 @@ class ReceiptLayoutParser {
           target.desc = '${cur.desc} ${target.desc}';
         }
         target.price ??= cur.price;
+        target.confidence = _minConf(target.confidence, cur.confidence);
         items.removeAt(k);
         changed = true;
         break;
@@ -618,9 +850,17 @@ class ReceiptLayoutParser {
       }
       if (best < 0) continue;
       items[best].desc = '${items[best].desc} ${cur.desc}';
+      items[best].confidence = _minConf(items[best].confidence, cur.confidence);
       items.removeAt(k);
       k--;
     }
+  }
+
+  /// Lowest known of two OCR confidences (null means unknown, not zero).
+  static double? _minConf(double? a, double? b) {
+    if (a == null) return b;
+    if (b == null) return a;
+    return a < b ? a : b;
   }
 
   static final _measurePattern = RegExp(
@@ -667,11 +907,35 @@ class ReceiptLayoutParser {
           break;
         }
       }
+      final candidates = <int>[];
       for (var i = start; i < end; i++) {
         if (kinds[i] != RowKind.bare) continue;
         if (consumedBare.contains(i)) continue;
         if (_centerY(rows[i]) >= boundY) continue;
         if (i >= specificaIdx) continue;
+        if (!t.amountPattern.hasMatch(rows[i].text)) continue;
+        candidates.add(i);
+      }
+      // Right-aligned price column, when it exists, anchors the pairing:
+      // only amounts on the column pair, in spatial (top→bottom) order.
+      // Stray numbers off the column (fragment of a description, a code)
+      // are excluded instead of shifting every pairing below them.
+      final column = detectPriceColumn(rows, candidates);
+      var ordered = candidates;
+      if (column != null) {
+        final hMed = [
+          for (final i in candidates)
+            (rows[i].box?.height ?? 0) > 0 ? rows[i].box!.height : 1.0,
+        ]..sort();
+        final tol = 0.5 * hMed[hMed.length ~/ 2];
+        ordered = [
+          for (final i in candidates)
+            if ((_rightEdge(rows[i]) - column.right).abs() <= tol) i,
+        ];
+      }
+      ordered = ordered.toList()
+        ..sort((a, b) => _centerY(rows[a]).compareTo(_centerY(rows[b])));
+      for (final i in ordered) {
         final m = t.amountPattern.firstMatch(rows[i].text);
         if (m == null) continue;
         amounts.add(t.parseItalianAmount(m.group(1)!));
@@ -779,6 +1043,8 @@ class ReceiptLayoutParser {
     } else {
       items[best].desc = '$text ${items[best].desc}';
     }
+    items[best].confidence =
+        _minConf(items[best].confidence, rows[rowIdx].confidence);
     return true;
   }
 
@@ -813,6 +1079,7 @@ class ReceiptLayoutParser {
       } else {
         items[best].desc = '${items[k].desc} ${items[best].desc}';
       }
+      items[best].confidence = _minConf(items[best].confidence, items[k].confidence);
       items.removeAt(k);
       k--;
     }
@@ -855,10 +1122,11 @@ class ReceiptLayoutParser {
 }
 
 class _RawItem {
-  _RawItem(this.desc, this.price, this.row);
+  _RawItem(this.desc, this.price, this.row, {this.confidence});
   String desc;
   double? price;
   final int row;
+  double? confidence;
 }
 
 class _RowBuild {

@@ -4,7 +4,7 @@
 
 ### Issue tracker
 
-Issues live as GitHub issues via `gh`. Repo non ancora git: prima di pubblicare serve `git init + remote`. See `docs/agents/issue-tracker.md`.
+Issues live as GitHub issues via `gh` nel repo `elchief84/receipt-ai`. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

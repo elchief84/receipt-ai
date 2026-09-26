@@ -13,7 +13,7 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 
 Infer the repo from `git remote -v` — `gh` does this automatically when run inside a clone.
 
-> Stato attuale: cartella non ancora git / senza remote GitHub. Prima di `gh issue create` serve `git init + remote GitHub`. Finché manca, tenere spec/ticket come draft locali.
+> Stato attuale: repo git con remote GitHub `elchief84/receipt-ai`. `gh issue create` funziona dal clone. Issues aperte #7–#20 (onda OCR/layout, label `ready-for-agent`); #1–#6 chiuse (MVP iniziale).
 
 ## Pull requests as a triage surface
 

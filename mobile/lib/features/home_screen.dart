@@ -1,11 +1,16 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../core/document_gate.dart';
+import '../core/extractor.dart';
 import '../core/feedback.dart';
 import '../core/history.dart';
+import '../core/image_quality.dart';
 import '../core/ocr.dart';
 import '../core/pipeline.dart';
+import '../core/receipt_layout.dart';
+import 'debug_overlay_screen.dart';
 import 'result_screen.dart';
 import 'samples.dart';
 import 'summary_screen.dart';
@@ -31,6 +36,20 @@ class HomeScreen extends StatelessWidget {
     final image = await picker.pickImage(source: source);
     if (image == null) return;
     if (!context.mounted) return;
+    // Quality gate (issue #15): a blurry/tiny photo makes OCR guess —
+    // ask for a better shot instead of emitting garbage.
+    final quality = await ImageQuality.assessFile(image.path);
+    if (!context.mounted) return;
+    if (quality != null && !quality.ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${quality.reason}: riprova con più luce e a fuoco',
+          ),
+        ),
+      );
+      return;
+    }
     final result = await ocr.recognize(image.path);
     debugPrint('[OCR-TEXT-START]\n${result.text}\n[OCR-TEXT-END]');
     // Geometry dump: what the parser actually sees (line + box). This
@@ -39,10 +58,12 @@ class HomeScreen extends StatelessWidget {
     debugPrint('[OCR-GEOM-START]');
     for (final l in result.lines) {
       final b = l.box;
+      final angle = l.angle?.toStringAsFixed(2) ?? '-';
+      final conf = l.confidence?.toStringAsFixed(2) ?? '-';
       debugPrint(
         'G ${b.left.toStringAsFixed(0)} ${b.top.toStringAsFixed(0)} '
         '${b.right.toStringAsFixed(0)} ${b.bottom.toStringAsFixed(0)} '
-        '| ${l.text}',
+        '| $angle | $conf | ${l.text}',
       );
     }
     debugPrint('[OCR-GEOM-END]');
@@ -58,14 +79,51 @@ class HomeScreen extends StatelessWidget {
     _handleOcrText(
       context,
       result.text,
-      result.lines.map((l) => l.box).toList(),
+      [
+        for (final l in result.lines)
+          LineGeometry(
+            l.box,
+            angle: l.angle,
+            corners: l.corners,
+            confidence: l.confidence,
+          ),
+      ],
+    );
+  }
+
+  /// Dev-only (issue #9): pick a photo and open the box overlay.
+  Future<void> _openDebugOverlay(BuildContext context) async {
+    final picker = ImagePicker();
+    final image = await picker.pickImage(source: ImageSource.gallery);
+    if (image == null || !context.mounted) return;
+    final result = await ocr.recognize(image.path);
+    if (!context.mounted) return;
+    final geometry = [
+      for (final l in result.lines)
+        LineGeometry(
+          l.box,
+          angle: l.angle,
+          corners: l.corners,
+          confidence: l.confidence,
+        ),
+    ];
+    final total = TransactionExtractor().extract(result.text).total;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => DebugOverlayScreen(
+          imagePath: image.path,
+          text: result.text,
+          geometry: geometry,
+          total: total,
+        ),
+      ),
     );
   }
 
   void _handleOcrText(
     BuildContext context,
     String text, [
-    List<Rect?>? geometry,
+    List<LineGeometry>? geometry,
   ]) {
     // RT-only scope (ADR-0008): anything else gets an explicit error,
     // never garbage output.
@@ -122,6 +180,15 @@ class HomeScreen extends StatelessWidget {
             icon: const Icon(Icons.pie_chart),
             label: const Text('Summary'),
           ),
+          if (kDebugMode) ...[
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              key: const Key('debugOverlay'),
+              onPressed: () => _openDebugOverlay(context),
+              icon: const Icon(Icons.bug_report),
+              label: const Text('Debug overlay (dev)'),
+            ),
+          ],
           const SizedBox(height: 24),
           const Text('Use sample receipt'),
           ...samples.map(

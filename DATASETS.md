@@ -3,6 +3,7 @@
 > Policy vincolante (da PROJECT.md): **vietato** usare scontrini/fatture personali reali per training/eval.
 > Solo: (1) dataset pubblici con licenza compatibile, (2) dati sintetici/compositi derivati da fonti reali, (3) dizionari merchant/prodotti pubblici.
 > Questo file è il registro unico delle fonti. Se una fonte non è qui, non si usa.
+> Eccezione (ADR-0011): foto reali dell'utente in una cartella `debug/` locale e **gitignored**, usate solo per diagnosi/eval locale, mai training. Cfr. `docs/debug-corpus.md`.
 
 ## 1. Decisione sintetica (cosa usiamo per cosa)
 
