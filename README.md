@@ -20,6 +20,8 @@ python -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python -m ml.datasets.build_merchant_gazetteer --in ml/data/seeds/merchants_seed.csv --out ml/data/merchant_gazetteer.csv
 .venv/bin/python -m ml.synthetic.compose_receipt --merchants ml/data/seeds/merchants_seed.csv --products ml/data/seeds/products_seed.csv --n 10000 --seed 42 --out /tmp/synth.jsonl
 .venv/bin/python -m ml.training.train_logreg --in /tmp/synth.jsonl --seed 42 --out-dir ml/data/exp2
+# Immagini sintetiche + ground truth per eval OCR/layout (issue #18): vedi docs/debug-corpus.md
+.venv/bin/python -m ml.synthetic.render_receipt --in /tmp/synth.jsonl --out /tmp/receipt_images --n 200 --seed 42
 .venv/bin/python -m pytest tests -q
 ```
 

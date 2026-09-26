@@ -155,6 +155,11 @@ Attribuzione obbligatoria in app/docs: `© OpenStreetMap contributors (ODbL)`.
 - iniettare rumore OCR realistico (`O→0, l→1, e→c`, whitespace, troncamenti) + varianti maiuscole/abbreviazioni;
 - emettere record con `merchant, merchant_type, items, amount, category, ocr_text` come da PROJECT.md §24.
 
+`ml/synthetic/render_receipt.py` (issue #18) rende ogni `ocr_text` in un PNG
+simil-termico con ground truth automatico (`expected.json`) e tilt/blur opzionali.
+Eval OCR/layout end-to-end: far girare ML Kit sui PNG (dump `ocr.log`) e poi
+`DEBUG_CORPUS_DIR=<out> flutter test mobile/test/eval_corpus_test.dart` → `docs/OCR_EVAL.md`.
+
 ### 4.4 Golden set manuale (solo test)
 
 - `samples/golden/` — 150–300 txt + trascrizione, da volantini/fatture-esempio pubblici, trascritti a mano;
