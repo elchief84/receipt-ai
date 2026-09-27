@@ -18,6 +18,10 @@ mai commit, mai upload.
    flutter run 2>&1 | tee debug/<slug>/ocr.log
    ```
 
+   Puoi incollare l'output di `flutter run` **così com'è**: l'harness metriche
+   rimuove da solo il prefisso logcat (`I/flutter (12835): …`) e le righe di
+   rumore (`… identical N line`).
+
 4. Copia anche la foto originale in `debug/<slug>/photo.jpg`.
 5. Scrivi `debug/<slug>/expected.json` con la verita' attesa:
 

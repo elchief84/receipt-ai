@@ -140,7 +140,11 @@ class ReceiptLayoutParser {
     var marked = false;
     for (var i = 0; i < rows.length; i++) {
       if (kinds[i] != RowKind.bodyStart) continue;
-      if (_isTrailerLike(rows[i].text)) continue;
+      // A totals line ("Subtotale articoli") is not a body header; a
+      // header row that merely merged with right-column labels
+      // ("Descrizione IVA Prezzo") still is (weak trailer tokens don't
+      // veto it — only TOTALE/SUBTOTALE do).
+      if (_isTotalsLine(rows[i].text)) continue;
       // "NUMERO DI ARTICOLI: 15" carries an articol-token but lives in
       // the trailer: never a body header.
       if (_hasToken(rows[i].text, 'numero')) continue;
@@ -563,12 +567,21 @@ class ReceiptLayoutParser {
     return false;
   }
 
+  /// A real totals boundary (TOTALE/SUBTOTALE), as opposed to the weaker
+  /// trailer vocabulary (IVA, PAGAMENTO, …) that can co-occur on a body
+  /// header row ("Descrizione IVA Prezzo").
+  static bool _isTotalsLine(String text) {
+    final key = t.keywordForm(text);
+    return t.totalKeywordPattern.hasMatch(key) ||
+        t.subtotalPattern.hasMatch(key);
+  }
+
   static RowKind _typeRow(LayoutRow row) {
     final text = row.text;
     final trimmed = text.trim();
     if (trimmed.isEmpty) return RowKind.noise;
     if (trimmed.startsWith('*')) return RowKind.noise;
-    if (t.isBodyStart(text) && !_isTrailerLike(text)) {
+    if (t.isBodyStart(text) && !_isTotalsLine(text)) {
       return RowKind.bodyStart;
     }
     if (_isTrailerLike(text)) return RowKind.trailer;

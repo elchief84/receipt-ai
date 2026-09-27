@@ -7,17 +7,18 @@
 
 | campione | totale | sum-ok | item |
 |----------|:------:|:------:|:----:|
+| action | OK | - | 12 |
+| fenza | OK | OK | 1 |
 
-## Metriche (n = 0)
+## Metriche (n = 2)
 
 | metrica | valore |
 |---------|:------:|
-| Exact match totale | 0.0% |
-| Sum-consistency rate | 0.0% |
-| Item count match | 0.0% |
-| Item precision | 0.0% |
-| Item recall | 0.0% |
-| Item F1 | 0.0% |
-| CER medio (descrizioni) | 0.0% |
+| Exact match totale | 100.0% |
+| Sum-consistency rate | 50.0% |
+| Item count match | 50.0% |
+| Item precision | 84.6% |
+| Item recall | 68.8% |
+| Item F1 | 75.9% |
+| CER medio (descrizioni) | 7.8% |
 
-_Nessun campione nel corpus: baseline vuota. Cattura una foto che fallisce (vedi docs/debug-corpus.md)._

@@ -130,6 +130,12 @@ const priceStopTokens = {
 /// articol-tokens — callers must skip trailer/boundary lines first.
 bool isBodyStart(String line) {
   final tokens = letterTokens(line);
+  if (tokens.isEmpty) return false;
+  // "Descrizione" as the first token is an unambiguous section header,
+  // even when the visual row also carries the right-column labels
+  // ("Descrizione IVA Prezzo"): the merged row exceeds the short-marker
+  // limit below.
+  if (tokens.first.startsWith('descriz')) return true;
   if (tokens.length > 3) return false;
   return tokens.any(
     (t) =>

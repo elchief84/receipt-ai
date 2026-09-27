@@ -48,7 +48,7 @@ _Sample? _load(Directory dir) {
   if (!log.existsSync() || !exp.existsSync()) return null;
   final text = log.readAsStringSync();
   final lines = _parseTextSection(text);
-  final geoms = _parseGeomSection(text, lines.length);
+  final geoms = _parseGeomSection(text, lines);
   return _Sample(
     dir.uri.pathSegments.where((s) => s.isNotEmpty).last,
     lines,
@@ -57,47 +57,93 @@ _Sample? _load(Directory dir) {
   );
 }
 
+/// `flutter run` prefixes every line with a logcat tag
+/// (`I/flutter (12835): ...`): strip it so a pasted console dump parses
+/// as if it were the raw `[OCR-…]` blocks.
+final _logPrefix = RegExp(r'^\s*[A-Z]\/[^(]+\(\s*\d+\):\s?');
+
+/// logcat de-duplicates repeated lines ("identical N line") and leaks
+/// its own markers; both are dropped.
+final _logNoise = RegExp(r'identical \d+ line|^\s*uid=\(');
+
+/// Cleans one captured block: strip the logcat prefix, drop logcat noise,
+/// trim trailing spaces, drop leading/trailing blanks. Applied identically
+/// to the text and geometry blocks so they stay aligned 1:1.
+List<String> _cleanBlock(String body) {
+  final out = <String>[];
+  for (final raw in body.split('\n')) {
+    var line = raw.replaceFirst(_logPrefix, '');
+    if (_logNoise.hasMatch(line)) continue;
+    line = line.trimRight();
+    out.add(line);
+  }
+  while (out.isNotEmpty && out.first.trim().isEmpty) {
+    out.removeAt(0);
+  }
+  while (out.isNotEmpty && out.last.trim().isEmpty) {
+    out.removeLast();
+  }
+  return out;
+}
+
 List<String> _parseTextSection(String log) {
   final start = log.indexOf('[OCR-TEXT-START]');
   final end = log.indexOf('[OCR-TEXT-END]');
   if (start < 0 || end < 0) return const [];
-  final body = log.substring(start + '[OCR-TEXT-START]'.length, end).trim();
-  return body.split('\n').map((l) => l.trimRight()).toList();
+  return _cleanBlock(log.substring(start + '[OCR-TEXT-START]'.length, end));
 }
 
-/// Parses the `[OCR-GEOM]` block into one [LineGeometry] per visual line,
-/// aligned 1:1 with [expectedLines]. Returns nulls when the geometry
-/// block is missing or the counts do not line up.
-List<LineGeometry?> _parseGeomSection(String log, int expectedLines) {
+/// Parses the `[OCR-GEOM]` block and aligns it to [textLines] by matching
+/// the line text, not by index: logcat de-duplication can drop a line in
+/// one block but not the other, and a strict 1:1 check would then throw
+/// away ALL geometry (the Action two-column case). Unmatched text lines
+/// get null geometry; leftover geometry is ignored.
+List<LineGeometry?> _parseGeomSection(String log, List<String> textLines) {
   final start = log.indexOf('[OCR-GEOM-START]');
   final end = log.indexOf('[OCR-GEOM-END]');
-  if (start < 0 || end < 0) return List.filled(expectedLines, null);
-  final body = log.substring(start + '[OCR-GEOM-START]'.length, end);
-  final geoms = <LineGeometry?>[];
-  for (final raw in body.split('\n')) {
-    final line = raw.trim();
+  if (start < 0 || end < 0) return List.filled(textLines.length, null);
+  final body = _cleanBlock(
+    log.substring(start + '[OCR-GEOM-START]'.length, end),
+  );
+  final entries = <({String text, LineGeometry geom})>[];
+  for (final line in body) {
     if (!line.startsWith('G ')) continue;
     // G <l> <t> <r> <b> | <angle> | <conf> | <text>
     final parts = line.substring(2).split('|');
     if (parts.length < 4) continue;
-    final nums = parts[0].trim().split(RegExp(r'\s+')).map(double.tryParse).toList();
+    final nums =
+        parts[0].trim().split(RegExp(r'\s+')).map(double.tryParse).toList();
     if (nums.length < 4 || nums.any((n) => n == null)) continue;
-    final angle = double.tryParse(parts[1].trim());
-    final conf = double.tryParse(parts[2].trim());
-    final text = parts.sublist(3).join('|').trim();
-    geoms.add(
-      LineGeometry(
+    entries.add((
+      text: parts.sublist(3).join('|').trim(),
+      geom: LineGeometry(
         Rect.fromLTRB(nums[0]!, nums[1]!, nums[2]!, nums[3]!),
-        angle: angle,
-        confidence: conf,
+        angle: double.tryParse(parts[1].trim()),
+        confidence: double.tryParse(parts[2].trim()),
         corners: const <Offset>[],
       ),
-    );
-    // The dump may not carry every text line; keep the text as a marker.
-    if (text.isEmpty) continue;
+    ));
   }
-  if (geoms.length != expectedLines) return List.filled(expectedLines, null);
-  return geoms;
+  final result = List<LineGeometry?>.filled(textLines.length, null);
+  var j = 0;
+  for (var i = 0; i < textLines.length; i++) {
+    final t = textLines[i].trim();
+    // Bounded look-ahead: a stray logcat line ("2") must not scan to the
+    // end (which would null out all the remaining geometry). Local drops
+    // are absorbed, a real mismatch just leaves this line with no box.
+    var found = -1;
+    for (var k = j; k < entries.length && k < j + 5; k++) {
+      if (entries[k].text == t) {
+        found = k;
+        break;
+      }
+    }
+    if (found >= 0) {
+      result[i] = entries[found].geom;
+      j = found + 1;
+    }
+  }
+  return result;
 }
 
 String _runEval(List<_Sample> samples) {
