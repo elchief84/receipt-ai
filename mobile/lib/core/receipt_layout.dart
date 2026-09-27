@@ -8,7 +8,6 @@
 /// - itemCount: NUMERO DI ARTICOLI cross-check when printed
 library;
 
-import 'dart:math' as math;
 import 'dart:ui' show Offset, Rect;
 
 import 'package:flutter/foundation.dart';
@@ -445,18 +444,18 @@ class ReceiptLayoutParser {
     return (right: med, count: aligned);
   }
 
-  /// Tilt of one line as a slope (dy/dx), from ML Kit corners when
-  /// present, else its rotation angle. Null when neither is available.
+  /// Tilt of one line as a slope (dy/dx), from the ML Kit corners only.
+  ///
+  /// The per-line `angle` is deliberately NOT used for the global slope:
+  /// it is a noisy recognizer estimate (often ±1-3° on a flat receipt),
+  /// and a wrong median tilts the whole page, misaligning the two
+  /// columns. The corners give the true top-edge slope; when they are
+  /// absent the box-pair estimator is the fallback.
   static double? _slopeFromGeometry(LineGeometry g) {
     final c = g.corners;
     if (c.length >= 2) {
       final dx = c[1].dx - c[0].dx;
       if (dx.abs() > 1) return (c[1].dy - c[0].dy) / dx;
-    }
-    final a = g.angle;
-    if (a != null) {
-      final slope = math.tan(a * math.pi / 180.0);
-      if (slope.isFinite) return slope;
     }
     return null;
   }

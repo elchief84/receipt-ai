@@ -40,6 +40,31 @@ void main() {
     );
     out.writeAsStringSync(report);
   });
+
+  test('rebuilds lines from geometry, tolerant of logcat prefix', () {
+    final dir = Directory.systemTemp.createTempSync('corpus');
+    final sample = Directory('${dir.path}/s1')..createSync();
+    File('${sample.path}/ocr.log').writeAsStringSync(
+      'I/flutter (1): [OCR-GEOM-START]\n'
+      'I/flutter (1): G 0 0 200 18 | - | 0.9 | CONAD SUPERSTORE\n'
+      'I/flutter (1): G 0 25 200 43 | - | 0.9 | P.IVA 01234567890\n'
+      'I/flutter (1): G 0 50 120 68 | - | 0.9 | ARTICOLI\n'
+      'I/flutter (1): G 0 80 150 98 | - | 0.9 | LATTE INTERO\n'
+      'I/flutter (1): G 250 80 300 98 | - | 0.9 | 1,49\n'
+      'I/flutter (1): G 0 140 260 158 | - | 0.9 | TOTALE COMPLESSIVO 1,49\n'
+      'I/flutter (1): [OCR-GEOM-END]\n',
+    );
+    File('${sample.path}/expected.json').writeAsStringSync(
+      '{"merchant":"CONAD","total":1.49,'
+      '"items":[{"description":"LATTE INTERO","price":1.49}]}',
+    );
+    final s = _load(sample)!;
+    expect(s.lineText, contains('LATTE INTERO'));
+    expect(s.geoms.every((g) => g != null), isTrue);
+    final report = _runEval([s]);
+    expect(report, contains('| s1 | OK | OK |'));
+    dir.deleteSync(recursive: true);
+  });
 }
 
 _Sample? _load(Directory dir) {
@@ -47,9 +72,23 @@ _Sample? _load(Directory dir) {
   final exp = File('${dir.path}/expected.json');
   if (!log.existsSync() || !exp.existsSync()) return null;
   final text = log.readAsStringSync();
-  final lines = _parseTextSection(text);
-  final geoms = _parseGeomSection(text, lines);
+  // The geometry block carries the line text too, and its lines differ by
+  // coordinates so logcat never collapses them: rebuild text AND geometry
+  // from it, 1:1 by construction. logcat de-duplicates the plain-text
+  // block (repeated "3,99"), which is why aligning the two blocks is
+  // unreliable. Fall back to the text block only if geometry is absent.
+  final entries = _parseGeomEntries(text);
+  final List<String> lines;
+  final List<LineGeometry?> geoms;
+  if (entries.isNotEmpty) {
+    lines = [for (final e in entries) e.text];
+    geoms = [for (final e in entries) e.geom];
+  } else {
+    lines = _parseTextSection(text);
+    geoms = List<LineGeometry?>.filled(lines.length, null);
+  }
   return _Sample(
+
     dir.uri.pathSegments.where((s) => s.isNotEmpty).last,
     lines,
     geoms,
@@ -93,15 +132,13 @@ List<String> _parseTextSection(String log) {
   return _cleanBlock(log.substring(start + '[OCR-TEXT-START]'.length, end));
 }
 
-/// Parses the `[OCR-GEOM]` block and aligns it to [textLines] by matching
-/// the line text, not by index: logcat de-duplication can drop a line in
-/// one block but not the other, and a strict 1:1 check would then throw
-/// away ALL geometry (the Action two-column case). Unmatched text lines
-/// get null geometry; leftover geometry is ignored.
-List<LineGeometry?> _parseGeomSection(String log, List<String> textLines) {
+/// Parses the `[OCR-GEOM]` block into ordered (text, geometry) entries.
+/// Each entry carries its own line text, so the ordered text and the
+/// geometry stay in lockstep without any cross-block alignment.
+List<({String text, LineGeometry geom})> _parseGeomEntries(String log) {
   final start = log.indexOf('[OCR-GEOM-START]');
   final end = log.indexOf('[OCR-GEOM-END]');
-  if (start < 0 || end < 0) return List.filled(textLines.length, null);
+  if (start < 0 || end < 0) return const [];
   final body = _cleanBlock(
     log.substring(start + '[OCR-GEOM-START]'.length, end),
   );
@@ -124,26 +161,7 @@ List<LineGeometry?> _parseGeomSection(String log, List<String> textLines) {
       ),
     ));
   }
-  final result = List<LineGeometry?>.filled(textLines.length, null);
-  var j = 0;
-  for (var i = 0; i < textLines.length; i++) {
-    final t = textLines[i].trim();
-    // Bounded look-ahead: a stray logcat line ("2") must not scan to the
-    // end (which would null out all the remaining geometry). Local drops
-    // are absorbed, a real mismatch just leaves this line with no box.
-    var found = -1;
-    for (var k = j; k < entries.length && k < j + 5; k++) {
-      if (entries[k].text == t) {
-        found = k;
-        break;
-      }
-    }
-    if (found >= 0) {
-      result[i] = entries[found].geom;
-      j = found + 1;
-    }
-  }
-  return result;
+  return entries;
 }
 
 String _runEval(List<_Sample> samples) {
