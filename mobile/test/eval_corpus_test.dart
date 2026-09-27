@@ -15,11 +15,22 @@ import 'package:receipt_ai/core/receipt_layout.dart';
 ///   `debug/[slug]/ocr.log`        dump [OCR-TEXT] + [OCR-GEOM]
 ///   `debug/[slug]/expected.json`  merchant, total, items(description, price)
 class _Sample {
-  _Sample(this.slug, this.lineText, this.geoms, this.expected);
+  _Sample(
+    this.slug,
+    this.lineText,
+    this.geoms,
+    this.expected, {
+    this.hasDump = true,
+  });
   final String slug;
   final List<String> lineText;
   final List<LineGeometry?> geoms;
   final Map<String, dynamic> expected;
+
+  /// False when the sample has no OCR dump (empty/missing blocks): it is
+  /// listed as "senza dump" and excluded from the metrics instead of
+  /// counting as a parser failure.
+  final bool hasDump;
 }
 
 void main() {
@@ -88,11 +99,11 @@ _Sample? _load(Directory dir) {
     geoms = List<LineGeometry?>.filled(lines.length, null);
   }
   return _Sample(
-
     dir.uri.pathSegments.where((s) => s.isNotEmpty).last,
     lines,
     geoms,
     json.decode(exp.readAsStringSync()) as Map<String, dynamic>,
+    hasDump: lines.isNotEmpty,
   );
 }
 
@@ -171,7 +182,8 @@ String _runEval(List<_Sample> samples) {
   var itemTp = 0, itemFp = 0, itemFn = 0;
   var cerSum = 0.0, cerN = 0;
 
-  for (final s in samples) {
+  final usable = [for (final s in samples) if (s.hasDump) s];
+  for (final s in usable) {
     final draft = TransactionExtractor().extract(s.lineText.join('\n'));
     final layout = ReceiptLayoutParser.parseLines(
       s.lineText,
@@ -216,7 +228,8 @@ String _runEval(List<_Sample> samples) {
     itemFp += got.length - used.length;
   }
 
-  final n = samples.length;
+  final n = usable.length;
+  final noDump = samples.length - n;
   final precision = itemTp + itemFp == 0 ? 0.0 : itemTp / (itemTp + itemFp);
   final recall = itemTp + itemFn == 0 ? 0.0 : itemTp / (itemTp + itemFn);
   final f1 = precision + recall == 0
@@ -236,6 +249,10 @@ String _runEval(List<_Sample> samples) {
   buf.writeln('| campione | totale | sum-ok | item |');
   buf.writeln('|----------|:------:|:------:|:----:|');
   for (final s in samples) {
+    if (!s.hasDump) {
+      buf.writeln('| ${s.slug} | _senza dump_ | - | - |');
+      continue;
+    }
     final draft = TransactionExtractor().extract(s.lineText.join('\n'));
     final layout = ReceiptLayoutParser.parseLines(s.lineText, s.geoms, draft.total);
     final expTotal = (s.expected['total'] as num).toDouble();
@@ -246,7 +263,9 @@ String _runEval(List<_Sample> samples) {
     );
   }
   buf.writeln();
-  buf.writeln('## Metriche (n = $n)');
+  buf.writeln(
+    '## Metriche (n = $n${noDump > 0 ? ", $noDump senza dump esclusi" : ""})',
+  );
   buf.writeln();
   buf.writeln('| metrica | valore |');
   buf.writeln('|---------|:------:|');
@@ -259,8 +278,8 @@ String _runEval(List<_Sample> samples) {
   buf.writeln('| CER medio (descrizioni) | ${(cer * 100).toStringAsFixed(1)}% |');
   buf.writeln();
   if (n == 0) {
-    buf.writeln('_Nessun campione nel corpus: baseline vuota. '
-        'Cattura una foto che fallisce (vedi docs/debug-corpus.md)._');
+    buf.writeln('_Nessun campione con dump nel corpus: baseline vuota. '
+        'Cattura una foto (vedi docs/debug-corpus.md)._');
   }
   return buf.toString();
 }

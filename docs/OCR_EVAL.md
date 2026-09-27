@@ -7,10 +7,11 @@
 
 | campione | totale | sum-ok | item |
 |----------|:------:|:------:|:----:|
+| autogrill | _senza dump_ | - | - |
 | action | OK | OK | 15 |
 | fenza | OK | OK | 1 |
 
-## Metriche (n = 2)
+## Metriche (n = 2, 1 senza dump esclusi)
 
 | metrica | valore |
 |---------|:------:|
