@@ -35,6 +35,14 @@ mai commit, mai upload.
    }
    ```
 
+   Per le righe con **quantità** indica l'importo che lo scontrino **stampa**
+   (di norma il totale di riga) in `total`; l'harness confronta `total` se
+   presente, altrimenti `price`:
+
+   ```json
+   {"description": "Focaccia", "quantity": 3, "price": 2.00, "total": 6.00}
+   ```
+
 6. (Opzionale) `notes.md`: sintomo osservato (righe mischiate? prezzo su
    riga sbagliata? testo illeggibile?).
 

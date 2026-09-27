@@ -201,7 +201,9 @@ String _runEval(List<_Sample> samples) {
 
     final used = <int>{};
     for (final e in expItems) {
-      final ep = (e['price'] as num).toDouble();
+      // The receipt prints the LINE amount: for quantity lines that is
+      // `total`, otherwise `price`.
+      final ep = ((e['total'] ?? e['price']) as num).toDouble();
       var best = -1;
       var bestSim = 0.0;
       for (var i = 0; i < got.length; i++) {

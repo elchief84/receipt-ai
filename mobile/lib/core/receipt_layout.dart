@@ -224,7 +224,7 @@ class ReceiptLayoutParser {
     if (geoms == null) {
       return [
         for (var i = 0; i < lines.length; i++)
-          LayoutRow([i], lines[i], null),
+          LayoutRow([i], t.stripPercent(lines[i]), null),
       ];
     }
     final geomOf = <int, LineGeometry>{};
@@ -235,7 +235,7 @@ class ReceiptLayoutParser {
     if (geomOf.isEmpty) {
       return [
         for (var i = 0; i < lines.length; i++)
-          LayoutRow([i], lines[i], null),
+          LayoutRow([i], t.stripPercent(lines[i]), null),
       ];
     }
     final boxOf = <int, Rect>{for (final e in geomOf.entries) e.key: e.value.box};
@@ -395,7 +395,7 @@ class ReceiptLayoutParser {
       for (final r in orderedRows)
         LayoutRow(
           r.indices..sort((a, b) => boxOf[a]!.left.compareTo(boxOf[b]!.left)),
-          r.indices.map((i) => lines[i]).join(' '),
+          t.stripPercent(r.indices.map((i) => lines[i]).join(' ')),
           boxOf[r.indices.first],
           confidence: _minConfidence(r.indices, geomOf),
           corners: geomOf[r.indices.first]?.corners ?? const [],

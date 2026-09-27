@@ -6,6 +6,18 @@ library;
 /// phone numbers ("0564.620438") and matricola codes.
 final amountPattern = RegExp(r'(\d[\d.]*(?:[,.]\d{2}))(?!\d)');
 
+/// An IVA/percentage cell ("10,00%", "10,00 %"). On RT receipts this is a
+/// separate column that the row builder merges next to the price: left in
+/// the text it poisons both the description and (being the left-most
+/// number) the extracted price. Stripped from every visual row.
+final percentPattern = RegExp(r'\d[\d.,]*\s*%');
+
+/// Removes percentage cells from a row and squeezes the extra spaces.
+String stripPercent(String row) => row
+    .replaceAll(percentPattern, ' ')
+    .replaceAll(RegExp(r'\s{2,}'), ' ')
+    .trim();
+
 double parseItalianAmount(String raw) {
   // "1.234,56" -> 1234.56 ; "10.60" -> 10.60 ; "10,60" -> 10.60
   if (raw.contains(',')) {

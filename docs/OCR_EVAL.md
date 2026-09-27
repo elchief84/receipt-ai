@@ -7,19 +7,19 @@
 
 | campione | totale | sum-ok | item |
 |----------|:------:|:------:|:----:|
-| autogrill | _senza dump_ | - | - |
+| autogrill | OK | OK | 12 |
 | action | OK | OK | 15 |
 | fenza | OK | OK | 1 |
 
-## Metriche (n = 2, 1 senza dump esclusi)
+## Metriche (n = 3)
 
 | metrica | valore |
 |---------|:------:|
 | Exact match totale | 100.0% |
 | Sum-consistency rate | 100.0% |
 | Item count match | 100.0% |
-| Item precision | 93.8% |
-| Item recall | 93.8% |
-| Item F1 | 93.8% |
-| CER medio (descrizioni) | 5.8% |
+| Item precision | 92.9% |
+| Item recall | 92.9% |
+| Item F1 | 92.9% |
+| CER medio (descrizioni) | 4.8% |
 
